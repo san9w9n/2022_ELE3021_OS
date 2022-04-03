@@ -22,6 +22,7 @@ tvinit(void)
   for(i = 0; i < 256; i++)
     SETGATE(idt[i], 0, SEG_KCODE<<3, vectors[i], 0);
   SETGATE(idt[T_SYSCALL], 1, SEG_KCODE<<3, vectors[T_SYSCALL], DPL_USER);
+  SETGATE(idt[128], 1, SEG_KCODE<<3, vectors[128], DPL_USER);
 
   initlock(&tickslock, "time");
 }
@@ -77,6 +78,9 @@ trap(struct trapframe *tf)
             cpuid(), tf->cs, tf->eip);
     lapiceoi();
     break;
+  case 128: 
+    cprintf("user interrupt 128 called!\n");
+    exit();
 
   //PAGEBREAK: 13
   default:
@@ -104,7 +108,7 @@ trap(struct trapframe *tf)
   // If interrupts were on while locks held, would need to check nlock.
   if(myproc() && myproc()->state == RUNNING &&
      tf->trapno == T_IRQ0+IRQ_TIMER)
-    yield();
+    yield(); // goto scheduler thread
 
   // Check if the process has been killed since we yielded
   if(myproc() && myproc()->killed && (tf->cs&3) == DPL_USER)
