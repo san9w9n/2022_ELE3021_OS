@@ -83,6 +83,12 @@ sys_sleep(void)
   return 0;
 }
 
+void
+sys_yield(void)
+{
+  return yield();
+}
+
 // return how many clock tick interrupts have occurred
 // since start.
 int
