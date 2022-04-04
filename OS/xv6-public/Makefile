@@ -72,7 +72,7 @@ QEMU = $(shell if which qemu > /dev/null; \
 	echo "***" 1>&2; exit 1)
 endif
 
-SCHED_POLICY = MLFQ_SCHED
+SCHED_POLICY = MULTILEVEL_SCHED
 MLFQ_K = 5
 CPUS = 1
 
@@ -189,6 +189,7 @@ UPROGS=\
 	_lab01_userapp\
 	_lab02_userapp\
 	_lab03_userapp\
+	_ml_test\
 	_project01\
 	
 
@@ -261,7 +262,7 @@ EXTRA=\
 	mkfs.c ulib.c user.h cat.c echo.c forktest.c grep.c kill.c\
 	ln.c ls.c mkdir.c rm.c stressfs.c usertests.c wc.c zombie.c\
 	printf.c umalloc.c lab01_userapp.c project01.c lab02_userapp.c\
-	lab03_userapp.c\
+	lab03_userapp.c ml_test.c\
 	README dot-bochsrc *.pl toc.* runoff runoff1 runoff.list\
 	.gdbinit.tmpl gdbutil\
 

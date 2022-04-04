@@ -37,8 +37,9 @@ idtinit(void)
 void
 trap(struct trapframe *tf)
 {
+#ifdef MLFQ_SCHED
   char priorityBoostingFlag = 0;
-
+#endif
   if(tf->trapno == T_SYSCALL){
     if(myproc()->killed)
       exit();

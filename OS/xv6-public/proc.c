@@ -90,7 +90,7 @@ found:
   p->pid = nextpid++;
 
 #ifdef MULTILEVEL_SCHED
-  p->levelOfQueue = (p->pid % 2 == 0) ? 1 : 0;
+  p->levelOfQueue = (p->pid % 2 == 0) ? 0 : 1;
 #elif MLFQ_SCHED
   p->levelOfQueue = 0;
   p->isExcuting = 0;
@@ -342,50 +342,45 @@ scheduler(void)
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
 #ifdef MULTILEVEL_SCHED
-    struct proc *pointProc;
-    char roundRobin;
-    uint minOddPid;
+    char roundRobin = 0;
 
-    pointProc = 0;
-    roundRobin = 0;
-    minOddPid = (uint)-1;
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->state != RUNNABLE) 
-        continue;
-      if(p->levelOfQueue == 0){
-        pointProc = p;
+      if(p->state == RUNNABLE && p->levelOfQueue == 0) {
         roundRobin = 1;
         break;
-      } else if(minOddPid > p->pid){
-        pointProc = p;
-        minOddPid = p->pid;
       }
     }
 
     if(roundRobin){
-      for(; pointProc < &ptable.proc[NPROC]; pointProc++){
-        if(pointProc->state != RUNNABLE || 
-           pointProc->levelOfQueue == 0)
+      for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+        if(p->state != RUNNABLE || p->levelOfQueue == 1)
           continue;
+        c->proc = p;
+        switchuvm(p);
+        p->state = RUNNING;
 
-        c->proc = pointProc;
-        switchuvm(pointProc);
-        pointProc->state = RUNNING;
-
-        swtch(&(c->scheduler), pointProc->context);
+        swtch(&(c->scheduler), p->context);
         switchkvm();
         c->proc = 0;
       }
     }
-    else if(pointProc){
-      c->proc = pointProc;
-      switchuvm(pointProc);
-      pointProc->state = RUNNING;
+    else{
+      struct proc *point = 0;
+      for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+        if(p->state != RUNNABLE || p->levelOfQueue == 0)
+          continue;
+        if(!point || (point->pid > p->pid))
+          point = p;
+      }
+      if(point){
+        c->proc = point;
+        switchuvm(point);
+        point->state = RUNNING;
 
-      swtch(&(c->scheduler), pointProc->context);
-      switchkvm();
-
-      c->proc = 0;
+        swtch(&(c->scheduler), point->context);
+        switchkvm();
+        c->proc = 0;
+      }
     }
 #elif MLFQ_SCHED
     int level;
