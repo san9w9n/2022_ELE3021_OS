@@ -37,6 +37,8 @@ idtinit(void)
 void
 trap(struct trapframe *tf)
 {
+  char priorityBoostingFlag = 0;
+
   if(tf->trapno == T_SYSCALL){
     if(myproc()->killed)
       exit();
@@ -52,6 +54,12 @@ trap(struct trapframe *tf)
     if(cpuid() == 0){
       acquire(&tickslock);
       ticks++;
+#ifdef MLFQ_SCHED
+      if(ticks % 100 == 0)
+        priorityBoostingFlag = 1;
+      if(myproc()) 
+        myproc()->ticks++;
+#endif
       wakeup(&ticks);
       release(&tickslock);
     }
@@ -104,12 +112,19 @@ trap(struct trapframe *tf)
   if(myproc() && myproc()->killed && (tf->cs&3) == DPL_USER)
     exit();
 
-  // Force process to give up CPU on clock tick.
-  // If interrupts were on while locks held, would need to check nlock.
+#ifdef MLFQ_SCHED
+  if(tf->trapno == T_IRQ0+IRQ_TIMER){
+    if(myproc() && myproc()->state == RUNNING)
+      myproc()->isExcuting = 1;
+    if(priorityBoostingFlag)
+      priority_boosting();
+  }
+#endif
+
   if(myproc() && myproc()->state == RUNNING &&
      tf->trapno == T_IRQ0+IRQ_TIMER)
-    yield(); // goto scheduler thread
-
+    yield();
+  
   // Check if the process has been killed since we yielded
   if(myproc() && myproc()->killed && (tf->cs&3) == DPL_USER)
     exit();

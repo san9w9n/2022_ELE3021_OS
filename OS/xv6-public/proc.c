@@ -89,6 +89,15 @@ found:
   p->state = EMBRYO;
   p->pid = nextpid++;
 
+#ifdef MULTILEVEL_SCHED
+  p->levelOfQueue = (p->pid % 2 == 0) ? 1 : 0;
+#elif MLFQ_SCHED
+  p->levelOfQueue = 0;
+  p->isExcuting = 0;
+  p->priority = 0;
+  p->ticks = 0;
+#endif
+
   release(&ptable.lock);
 
   // Allocate kernel stack.
@@ -332,25 +341,103 @@ scheduler(void)
 
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
+#ifdef MULTILEVEL_SCHED
+    struct proc *pointProc;
+    char roundRobin;
+    uint minOddPid;
+
+    pointProc = 0;
+    roundRobin = 0;
+    minOddPid = (uint)-1;
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if(p->state != RUNNABLE) 
+        continue;
+      if(p->levelOfQueue == 0){
+        pointProc = p;
+        roundRobin = 1;
+        break;
+      } else if(minOddPid > p->pid){
+        pointProc = p;
+        minOddPid = p->pid;
+      }
+    }
+
+    if(roundRobin){
+      for(; pointProc < &ptable.proc[NPROC]; pointProc++){
+        if(pointProc->state != RUNNABLE || 
+           pointProc->levelOfQueue == 0)
+          continue;
+
+        c->proc = pointProc;
+        switchuvm(pointProc);
+        pointProc->state = RUNNING;
+
+        swtch(&(c->scheduler), pointProc->context);
+        switchkvm();
+        c->proc = 0;
+      }
+    }
+    else if(pointProc){
+      c->proc = pointProc;
+      switchuvm(pointProc);
+      pointProc->state = RUNNING;
+
+      swtch(&(c->scheduler), pointProc->context);
+      switchkvm();
+
+      c->proc = 0;
+    }
+#elif MLFQ_SCHED
+    int level;
+    int K = 5;
+    struct proc *procs[5] = {0, };
+
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if(p->state != RUNNABLE || p->pid <= 0)
+        continue;
+      if(p->ticks >= (2 * p->levelOfQueue + 4)) {
+        p->levelOfQueue ++;
+        p->ticks = 0;
+        p->isExcuting = 0;
+      }
+      if((level = p->levelOfQueue) >= K)
+        continue;
+        
+      if(!procs[level] || p->isExcuting)
+        procs[level] = p;
+      else if(procs[level]->isExcuting == 0 &&
+              procs[level]->priority < p->priority)
+        procs[level] = p;
+    }
+
+    for(int i = 0; i < K; i++){
+      if(!procs[i] || procs[i]->state != RUNNABLE) 
+        continue;
+      c->proc = procs[i];
+      switchuvm(procs[i]);
+      procs[i]->state = RUNNING;
+
+      swtch(&(c->scheduler), procs[i]->context);
+      switchkvm();
+
+      c->proc = 0;
+      break;
+    }
+#else
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
       if(p->state != RUNNABLE)
         continue;
-
-      // Switch to chosen process.  It is the process's job
-      // to release ptable.lock and then reacquire it
-      // before jumping back to us.
       c->proc = p;
       switchuvm(p);
       p->state = RUNNING;
+
       swtch(&(c->scheduler), p->context);
       switchkvm();
 
-      // Process is done running for now.
-      // It should have changed its p->state before coming back.
       c->proc = 0;
     }
+#endif
     release(&ptable.lock);
-
   }
 }
 
@@ -385,8 +472,17 @@ sched(void)
 void
 yield(void)
 {
+  struct proc *p;
+
   acquire(&ptable.lock);  //DOC: yieldlock
-  myproc()->state = RUNNABLE;
+  p = myproc();
+  p->state = RUNNABLE;
+#ifdef MLFQ_SCHED
+  p->levelOfQueue = 0;
+  p->isExcuting = 0;
+  p->ticks = 0;
+#endif
+
   sched();
   release(&ptable.lock);
 }
@@ -438,6 +534,11 @@ sleep(void *chan, struct spinlock *lk)
   // Go to sleep.
   p->chan = chan;
   p->state = SLEEPING;
+#ifdef MLFQ_SCHED
+  p->levelOfQueue = 0;
+  p->isExcuting = 0;
+  p->ticks = 0;
+#endif
 
   sched();
 
@@ -530,5 +631,45 @@ procdump(void)
         cprintf(" %p", pc[i]);
     }
     cprintf("\n");
+  }
+}
+
+int 
+getlev(void)
+{
+  return myproc()->levelOfQueue;
+}
+
+int
+setpriority(int pid, int priority)
+{
+  struct proc *parent, *p;
+
+  if(priority < 0 || priority > 10)
+    return -2;
+  
+  acquire(&ptable.lock);
+  parent = myproc();
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(p->pid == pid && p->parent == parent){
+      p->priority = (char)priority;
+      release(&ptable.lock);
+      return 0;
+    }
+  }
+  return -1;
+}
+
+void
+priority_boosting(void)
+{
+  struct proc *p;
+  
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(p->pid > 0){
+      p->levelOfQueue = 0;
+      p->isExcuting = 0;
+      p->ticks = 0;
+    }
   }
 }
