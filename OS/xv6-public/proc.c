@@ -384,14 +384,14 @@ scheduler(void)
     }
 #elif MLFQ_SCHED
     int level;
-    int K = 5;
+    int K = MLFQ_K;
     struct proc *procs[5] = {0, };
 
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->state != RUNNABLE || p->pid <= 0)
+      if(p->state != RUNNABLE || p->pid < 0)
         continue;
       if(p->ticks >= (2 * p->levelOfQueue + 4)) {
-        p->levelOfQueue ++;
+        p->levelOfQueue++;
         p->ticks = 0;
         p->isExcuting = 0;
       }
@@ -405,19 +405,23 @@ scheduler(void)
         procs[level] = p;
     }
 
+    char boostFlag = 1;
     for(int i = 0; i < K; i++){
       if(!procs[i] || procs[i]->state != RUNNABLE) 
         continue;
       c->proc = procs[i];
       switchuvm(procs[i]);
       procs[i]->state = RUNNING;
-
       swtch(&(c->scheduler), procs[i]->context);
       switchkvm();
 
       c->proc = 0;
+      boostFlag = 0;  
       break;
     }
+
+    if(boostFlag)
+      priority_boosting();
 #else
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
       if(p->state != RUNNABLE)
@@ -472,12 +476,6 @@ yield(void)
   acquire(&ptable.lock);  //DOC: yieldlock
   p = myproc();
   p->state = RUNNABLE;
-#ifdef MLFQ_SCHED
-  p->levelOfQueue = 0;
-  p->isExcuting = 0;
-  p->ticks = 0;
-#endif
-
   sched();
   release(&ptable.lock);
 }
@@ -529,11 +527,6 @@ sleep(void *chan, struct spinlock *lk)
   // Go to sleep.
   p->chan = chan;
   p->state = SLEEPING;
-#ifdef MLFQ_SCHED
-  p->levelOfQueue = 0;
-  p->isExcuting = 0;
-  p->ticks = 0;
-#endif
 
   sched();
 
@@ -646,12 +639,14 @@ setpriority(int pid, int priority)
   acquire(&ptable.lock);
   parent = myproc();
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-    if(p->pid == pid && p->parent == parent){
-      p->priority = (char)priority;
+    
+    if(p->pid == pid && p->parent && p->parent == parent){
+      p->priority = priority;
       release(&ptable.lock);
       return 0;
     }
   }
+  release(&ptable.lock);
   return -1;
 }
 

@@ -6,16 +6,17 @@ int
 main(int argc, char *argv[])
 {
     int pid = fork();
-    while (1)
-    {
-        if (!pid) {
-            write(1, "Child\n", 6);
+    while (1){
+        if(!pid){
+            printf(1, "Child : %d %d\n", getpid(), getlev());
             yield();
-        } else if (pid > 0) {
-            write(1, "Parent\n", 7);
+        } 
+        else if(pid > 0){
+            printf(1, "Parent : %d %d\n", getpid(), getlev());
             yield();
-        } else {
-            write(1, "Error\n", 6);
+        }
+        else{
+            printf(1, "Error\n");
             yield();
         }
     }
