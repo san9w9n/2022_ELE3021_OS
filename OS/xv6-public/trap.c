@@ -58,11 +58,15 @@ trap(struct trapframe *tf)
 #ifdef MLFQ_SCHED
       if(ticks % 100 == 0)
         priorityBoostingFlag = 1;
-      if(myproc()) 
-        myproc()->ticks++;
 #endif
       wakeup(&ticks);
       release(&tickslock);
+#ifdef MLFQ_SCHED
+      acquire_ptable_lock();
+      if(myproc()) 
+        myproc()->ticks++;
+      release_ptable_lock();
+#endif        
     }
     lapiceoi();
     break;
@@ -115,10 +119,12 @@ trap(struct trapframe *tf)
 
 #ifdef MLFQ_SCHED
   if(tf->trapno == T_IRQ0+IRQ_TIMER){
+    acquire_ptable_lock();
     if(myproc() && myproc()->state == RUNNING)
       myproc()->isExcuting = 1;
     if(priorityBoostingFlag)
       priority_boosting();
+    release_ptable_lock();
   }
 #endif
 

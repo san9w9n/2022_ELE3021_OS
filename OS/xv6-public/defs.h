@@ -123,7 +123,8 @@ void            yield(void);
 int             getlev(void);
 int             setpriority(int, int);
 void            priority_boosting(void);
-
+void            acquire_ptable_lock(void);
+void            release_ptable_lock(void);
 // swtch.S
 void            swtch(struct context**, struct context*);
 

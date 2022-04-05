@@ -304,6 +304,10 @@ wait(void)
         p->name[0] = 0;
         p->killed = 0;
         p->state = UNUSED;
+        p->isExcuting = 0;
+        p->levelOfQueue = 0;
+        p->ticks = 0;
+        p->priority = 0;
         release(&ptable.lock);
         return pid;
       }
@@ -639,7 +643,6 @@ setpriority(int pid, int priority)
   acquire(&ptable.lock);
   parent = myproc();
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-    
     if(p->pid == pid && p->parent && p->parent == parent){
       p->priority = priority;
       release(&ptable.lock);
@@ -654,7 +657,7 @@ void
 priority_boosting(void)
 {
   struct proc *p;
-  
+
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->pid > 0){
       p->levelOfQueue = 0;
@@ -662,4 +665,16 @@ priority_boosting(void)
       p->ticks = 0;
     }
   }
+}
+
+inline void
+acquire_ptable_lock(void)
+{
+  acquire(&ptable.lock);
+}
+
+inline void
+release_ptable_lock(void)
+{
+  release(&ptable.lock);
 }

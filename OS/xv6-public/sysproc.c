@@ -70,12 +70,14 @@ sys_sleep(void)
 
   if(argint(0, &n) < 0)
     return -1;
+
 #ifdef MLFQ_SCHED
+  acquire_ptable_lock();
   myproc()->levelOfQueue = 0;
   myproc()->isExcuting = 0;
   myproc()->ticks = 0;
+  release_ptable_lock();
 #endif
-  
   acquire(&tickslock);
   ticks0 = ticks;
   while(ticks - ticks0 < n){
@@ -93,9 +95,11 @@ void
 sys_yield(void)
 {
 #ifdef MLFQ_SCHED
+  acquire_ptable_lock();
   myproc()->levelOfQueue = 0;
   myproc()->isExcuting = 0;
   myproc()->ticks = 0;
+  release_ptable_lock();
 #endif
   return yield();
 }
