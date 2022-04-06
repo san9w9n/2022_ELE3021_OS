@@ -402,10 +402,10 @@ scheduler(void)
       if((level = p->levelOfQueue) >= K)
         continue;
         
-      if(!procs[level] || p->isExcuting)
+      if(!procs[level] || (p->isExcuting == 1))
         procs[level] = p;
-      else if(procs[level]->isExcuting == 0 &&
-              procs[level]->priority < p->priority)
+      else if((procs[level]->isExcuting == 0) &&
+              (procs[level]->priority < p->priority))
         procs[level] = p;
     }
 
@@ -643,7 +643,7 @@ setpriority(int pid, int priority)
   acquire(&ptable.lock);
   parent = myproc();
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-    if(p->pid == pid && p->parent && p->parent == parent){
+    if((p->pid == pid) && (p->parent) && (p->parent == parent)){
       p->priority = priority;
       release(&ptable.lock);
       return 0;
@@ -653,6 +653,7 @@ setpriority(int pid, int priority)
   return -1;
 }
 
+// The ptable lock must be held.
 void
 priority_boosting(void)
 {

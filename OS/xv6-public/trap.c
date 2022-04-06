@@ -120,7 +120,7 @@ trap(struct trapframe *tf)
 #ifdef MLFQ_SCHED
   if(tf->trapno == T_IRQ0+IRQ_TIMER){
     acquire_ptable_lock();
-    if(myproc() && myproc()->state == RUNNING)
+    if(myproc() && (myproc()->state == RUNNING))
       myproc()->isExcuting = 1;
     if(priorityBoostingFlag)
       priority_boosting();
