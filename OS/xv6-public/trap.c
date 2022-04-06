@@ -60,14 +60,21 @@ trap(struct trapframe *tf)
         priorityBoostingFlag = 1;
 #endif
       wakeup(&ticks);
-      release(&tickslock);
-#ifdef MLFQ_SCHED
-      acquire_ptable_lock();
-      if(myproc()) 
-        myproc()->ticks++;
-      release_ptable_lock();
-#endif        
+      release(&tickslock);        
     }
+#ifdef MLFQ_SCHED
+    acquire_ptable_lock();
+    struct proc *p = myproc();
+    if(p && (p->levelOfQueue < MLFQ_K)){
+      p->ticks++;
+      if((p->ticks) >= (2 * p->levelOfQueue + 4)){
+        p->levelOfQueue++;
+        p->ticks = 0;
+        p->isExcuting = 0;
+      }
+    }
+    release_ptable_lock();
+#endif
     lapiceoi();
     break;
   case T_IRQ0 + IRQ_IDE:

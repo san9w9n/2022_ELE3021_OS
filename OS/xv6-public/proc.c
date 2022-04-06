@@ -392,13 +392,8 @@ scheduler(void)
     struct proc *procs[5] = {0, };
 
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->state != RUNNABLE || p->pid < 0)
+      if((p->state != RUNNABLE) || (p->pid < 0))
         continue;
-      if(p->ticks >= (2 * p->levelOfQueue + 4)) {
-        p->levelOfQueue++;
-        p->ticks = 0;
-        p->isExcuting = 0;
-      }
       if((level = p->levelOfQueue) >= K)
         continue;
         
