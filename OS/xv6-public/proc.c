@@ -362,7 +362,7 @@ scheduler(void)
         c->proc = p;
         switchuvm(p);
         p->state = RUNNING;
-
+        // cprintf("ticks = %d, pid = %d, name = %s\n", ticks, p->pid, p->name);
         swtch(&(c->scheduler), p->context);
         switchkvm();
         c->proc = 0;
@@ -380,7 +380,7 @@ scheduler(void)
         c->proc = point;
         switchuvm(point);
         point->state = RUNNING;
-
+        // cprintf("ticks = %d, pid = %d, name = %s\n", ticks, point->pid, point->name);
         swtch(&(c->scheduler), point->context);
         switchkvm();
         c->proc = 0;
@@ -411,6 +411,7 @@ scheduler(void)
       c->proc = procs[i];
       switchuvm(procs[i]);
       procs[i]->state = RUNNING;
+      // cprintf("ticks = %d, pid = %d, name = %s\n", ticks, procs[i]->pid, procs[i]->name);
       swtch(&(c->scheduler), procs[i]->context);
       switchkvm();
 
@@ -428,7 +429,7 @@ scheduler(void)
       c->proc = p;
       switchuvm(p);
       p->state = RUNNING;
-
+      // cprintf("ticks = %d, pid = %d, name = %s\n", ticks, p->pid, p->name);
       swtch(&(c->scheduler), p->context);
       switchkvm();
 
