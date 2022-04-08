@@ -397,11 +397,17 @@ scheduler(void)
       if((level = p->levelOfQueue) >= K)
         continue;
         
-      if(!procs[level] || (p->isExcuting == 1))
+      if(!procs[level])
         procs[level] = p;
-      else if((procs[level]->isExcuting == 0) &&
-              (procs[level]->priority < p->priority))
+      else if(procs[level]->isExcuting == 0){
+        if(p->isExcuting == 1)
+          procs[level] = p;
+        else if(procs[level]->priority < p->priority)
+          procs[level] = p;
+      }
+      else if((p->isExcuting == 1) && (procs[level]->priority < p->priority)){
         procs[level] = p;
+      }
     }
 
     char boostFlag = 1;
