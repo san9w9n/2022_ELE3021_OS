@@ -72,8 +72,8 @@ QEMU = $(shell if which qemu > /dev/null; \
 	echo "***" 1>&2; exit 1)
 endif
 
-SCHED_POLICY = MLFQ_SCHED
-MLFQ_K = 5
+SCHED_POLICY = DEFAULT
+MLFQ_K = 2
 CPUS = 1
 
 CC = $(TOOLPREFIX)gcc
