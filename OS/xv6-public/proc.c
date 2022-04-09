@@ -90,7 +90,7 @@ found:
   p->pid = nextpid++;
 
 #ifdef MULTILEVEL_SCHED
-  p->levelOfQueue = (p->pid % 2 == 0) ? 0 : 1;
+  p->levelOfQueue = (p->pid % 2);
 #elif MLFQ_SCHED
   p->levelOfQueue = 0;
   p->isExcuting = 0;
