@@ -56,8 +56,11 @@ trap(struct trapframe *tf)
       acquire(&tickslock);
       ticks++;
 #ifdef MLFQ_SCHED
-      if(ticks % 100 == 0)
+      if(ticks % 100 == 0) {
         priorityBoostingFlag = 1;
+        if(ticks == (uint)4294967200)
+          ticks = 0;
+      }
 #endif
       wakeup(&ticks);
       release(&tickslock);        

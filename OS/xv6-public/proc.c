@@ -387,45 +387,39 @@ scheduler(void)
 #elif MLFQ_SCHED
     int level;
     int K = MLFQ_K;
-    struct proc *procs[10] = {0, };
-    // int start;
-    // start = ticks;
+    struct proc *point = 0;
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if((p->state != RUNNABLE) || (p->pid < 0))
+      if((p->state != RUNNABLE) || ((level = p->levelOfQueue) >= K))
         continue;
-      if((level = p->levelOfQueue) >= K)
-        continue;
-        
-      if(!procs[level])
-        procs[level] = p;
-      else if(procs[level]->ticks == 0){
-        if((p->ticks > 0) || (procs[level]->priority < p->priority))
-          procs[level] = p;
+      if(!point)
+        point = p;
+      else if(point->levelOfQueue != level){
+        if(point->levelOfQueue > level)
+          point = p;
       }
-      else if((p->ticks > 0) && (procs[level]->priority < p->priority)){
-        procs[level] = p;
+      else if((point->ticks > 0) != (p->ticks > 0)){
+        if(p->ticks > 0)
+          point = p;
+      }
+      else if(point->priority != p->priority){
+        if(point->priority < p->priority)
+          point = p;
+      }
+      else if(point->pid > p->pid){
+        point = p;
       }
     }
 
-    char boostFlag = 1;
-    for(int i = 0; i < K; i++){
-      if(!procs[i] || procs[i]->state != RUNNABLE) 
-        continue;
-      c->proc = procs[i];
-      switchuvm(procs[i]);
-      procs[i]->state = RUNNING;
-      // cprintf("ticks = %d, pid = %d, name = %s\n", ticks, procs[i]->pid, procs[i]->name);
-      // if (start != ticks) cprintf("preemption time is too long!\n");
-      swtch(&(c->scheduler), procs[i]->context);
-      switchkvm();
-
-      c->proc = 0;
-      boostFlag = 0;  
-      break;
-    }
-
-    if(boostFlag)
+    if(!point)
       priority_boosting();
+    else{
+      c->proc = point;
+      switchuvm(point);
+      point->state = RUNNING;
+      swtch(&(c->scheduler), point->context);
+      switchkvm();
+      c->proc = 0;
+    }
 #else
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
       if(p->state != RUNNABLE)
@@ -629,7 +623,8 @@ procdump(void)
 int 
 getlev(void)
 {
-  return myproc()->levelOfQueue;
+  if(myproc()) return myproc()->levelOfQueue;
+  return -1;
 }
 
 int
