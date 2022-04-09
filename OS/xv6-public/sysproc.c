@@ -85,7 +85,6 @@ sys_sleep(void)
   #ifdef MLFQ_SCHED
   acquire_ptable_lock();
   myproc()->levelOfQueue = 0;
-  myproc()->isExcuting = 0;
   myproc()->ticks = 0;
   release_ptable_lock();
   #endif
@@ -99,7 +98,6 @@ sys_yield(void)
 #ifdef MLFQ_SCHED
   acquire_ptable_lock();
   myproc()->levelOfQueue = 0;
-  myproc()->isExcuting = 0;
   myproc()->ticks = 0;
   release_ptable_lock();
 #endif

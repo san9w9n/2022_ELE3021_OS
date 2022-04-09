@@ -72,7 +72,7 @@ QEMU = $(shell if which qemu > /dev/null; \
 	echo "***" 1>&2; exit 1)
 endif
 
-SCHED_POLICY = MULTILEVEL_SCHED
+SCHED_POLICY = MLFQ_SCHED
 MLFQ_K = 5
 CPUS = 1
 

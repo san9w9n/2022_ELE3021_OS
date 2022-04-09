@@ -52,7 +52,6 @@ struct proc {
   int levelOfQueue;
   uint ticks;
   int priority;
-  char isExcuting;
 };
 
 // Process memory is laid out contiguously, low addresses first:

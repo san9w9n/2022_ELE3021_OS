@@ -93,7 +93,6 @@ found:
   p->levelOfQueue = (p->pid % 2);
 #elif MLFQ_SCHED
   p->levelOfQueue = 0;
-  p->isExcuting = 0;
   p->priority = 0;
   p->ticks = 0;
 #endif
@@ -304,7 +303,6 @@ wait(void)
         p->name[0] = 0;
         p->killed = 0;
         p->state = UNUSED;
-        p->isExcuting = 0;
         p->levelOfQueue = 0;
         p->ticks = 0;
         p->priority = 0;
@@ -400,11 +398,11 @@ scheduler(void)
         
       if(!procs[level])
         procs[level] = p;
-      else if(procs[level]->isExcuting == 0){
-        if((p->isExcuting == 1) || (procs[level]->priority < p->priority))
+      else if(procs[level]->ticks == 0){
+        if((p->ticks > 0) || (procs[level]->priority < p->priority))
           procs[level] = p;
       }
-      else if((p->isExcuting == 1) && (procs[level]->priority < p->priority)){
+      else if((p->ticks > 0) && (procs[level]->priority < p->priority)){
         procs[level] = p;
       }
     }
@@ -664,7 +662,6 @@ priority_boosting(void)
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->pid > 0){
       p->levelOfQueue = 0;
-      p->isExcuting = 0;
       p->ticks = 0;
     }
   }
