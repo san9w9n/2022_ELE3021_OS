@@ -73,7 +73,7 @@ QEMU = $(shell if which qemu > /dev/null; \
 endif
 
 SCHED_POLICY = DEFAULT
-MLFQ_K = 2
+MLFQ_K = 5
 CPUS = 1
 
 CC = $(TOOLPREFIX)gcc

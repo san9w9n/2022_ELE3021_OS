@@ -70,7 +70,7 @@ trap(struct trapframe *tf)
     struct proc *p = myproc();
     if(p && (p->state == RUNNING) && (p->levelOfQueue < MLFQ_K)){
       p->ticks++;
-      if((p->ticks) >= (2 * p->levelOfQueue + 4)){
+      if((p->ticks) >= (4 * p->levelOfQueue + 2)){
         p->levelOfQueue++;
         p->ticks = 0;
       }
