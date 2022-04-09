@@ -65,14 +65,17 @@ trap(struct trapframe *tf)
 #ifdef MLFQ_SCHED
     acquire_ptable_lock();
     struct proc *p = myproc();
-    if(p && (p->levelOfQueue < MLFQ_K)){
+    if(p && (p->state == RUNNING) && (p->levelOfQueue < MLFQ_K)){
       p->ticks++;
+      p->isExcuting = 1;
       if((p->ticks) >= (2 * p->levelOfQueue + 4)){
         p->levelOfQueue++;
         p->ticks = 0;
         p->isExcuting = 0;
       }
     }
+    if(priorityBoostingFlag)
+      priority_boosting();
     release_ptable_lock();
 #endif
     lapiceoi();
@@ -123,17 +126,6 @@ trap(struct trapframe *tf)
   // until it gets to the regular system call return.)
   if(myproc() && myproc()->killed && (tf->cs&3) == DPL_USER)
     exit();
-
-#ifdef MLFQ_SCHED
-  if(tf->trapno == T_IRQ0+IRQ_TIMER){
-    acquire_ptable_lock();
-    if(myproc() && (myproc()->state == RUNNING))
-      myproc()->isExcuting = 1;
-    if(priorityBoostingFlag)
-      priority_boosting();
-    release_ptable_lock();
-  }
-#endif
 
   if(myproc() && myproc()->state == RUNNING &&
      tf->trapno == T_IRQ0+IRQ_TIMER)

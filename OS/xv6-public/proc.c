@@ -357,7 +357,7 @@ scheduler(void)
 
     if(roundRobin){
       for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-        if(p->state != RUNNABLE || p->levelOfQueue == 1)
+        if(p->state != RUNNABLE || p->levelOfQueue != 0)
           continue;
         c->proc = p;
         switchuvm(p);
@@ -371,7 +371,7 @@ scheduler(void)
     else{
       struct proc *point = 0;
       for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-        if(p->state != RUNNABLE || p->levelOfQueue == 0)
+        if(p->state != RUNNABLE || p->levelOfQueue != 1)
           continue;
         if(!point || (point->pid > p->pid))
           point = p;
@@ -389,8 +389,9 @@ scheduler(void)
 #elif MLFQ_SCHED
     int level;
     int K = MLFQ_K;
-    struct proc *procs[5] = {0, };
-
+    struct proc *procs[10] = {0, };
+    // int start;
+    // start = ticks;
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
       if((p->state != RUNNABLE) || (p->pid < 0))
         continue;
@@ -400,9 +401,7 @@ scheduler(void)
       if(!procs[level])
         procs[level] = p;
       else if(procs[level]->isExcuting == 0){
-        if(p->isExcuting == 1)
-          procs[level] = p;
-        else if(procs[level]->priority < p->priority)
+        if((p->isExcuting == 1) || (procs[level]->priority < p->priority))
           procs[level] = p;
       }
       else if((p->isExcuting == 1) && (procs[level]->priority < p->priority)){
@@ -418,6 +417,7 @@ scheduler(void)
       switchuvm(procs[i]);
       procs[i]->state = RUNNING;
       // cprintf("ticks = %d, pid = %d, name = %s\n", ticks, procs[i]->pid, procs[i]->name);
+      // if (start != ticks) cprintf("preemption time is too long!\n");
       swtch(&(c->scheduler), procs[i]->context);
       switchkvm();
 
