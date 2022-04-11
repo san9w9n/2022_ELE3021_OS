@@ -67,16 +67,19 @@ trap(struct trapframe *tf)
     }
 #ifdef MLFQ_SCHED
     acquire_ptable_lock();
-    struct proc *p = myproc();
-    if(p && (p->state == RUNNING) && (p->levelOfQueue < MLFQ_K)){
-      p->ticks++;
-      if((p->ticks) >= (4 * p->levelOfQueue + 2)){
-        p->levelOfQueue++;
-        p->ticks = 0;
+    if(priorityBoostingFlag){
+      priority_boosting();
+    }
+    else{
+      struct proc *p = myproc();
+      if(p && (p->state == RUNNING) && (p->levelOfQueue < MLFQ_K)){
+        p->ticks++;
+        if((p->ticks) >= (4 * p->levelOfQueue + 2)){
+          p->levelOfQueue++;
+          p->ticks = 0;
+        }
       }
     }
-    if(priorityBoostingFlag)
-      priority_boosting();
     release_ptable_lock();
 #endif
     lapiceoi();
@@ -133,8 +136,9 @@ trap(struct trapframe *tf)
     yield();
 #else
   if(myproc() && myproc()->state == RUNNING &&
-     tf->trapno == T_IRQ0+IRQ_TIMER)
+     tf->trapno == T_IRQ0+IRQ_TIMER) {
     yield();
+  }
 #endif
   
   // Check if the process has been killed since we yielded
