@@ -125,6 +125,9 @@ int             setpriority(int, int);
 void            priority_boosting(void);
 void            acquire_ptable_lock(void);
 void            release_ptable_lock(void);
+int             thread_create(thread_t*, void*, void*);
+void            thread_exit(void*);
+int             thread_join(thread_t, void**);
 
 
 // swtch.S

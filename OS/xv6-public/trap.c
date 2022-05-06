@@ -134,6 +134,11 @@ trap(struct trapframe *tf)
   if(myproc() && myproc()->levelOfQueue == 0 && myproc()->state == RUNNING &&
      tf->trapno == T_IRQ0+IRQ_TIMER)
     yield();
+#elif MLFQ_SCHED
+  if(myproc() && myproc()->state == RUNNING &&
+     tf->trapno == T_IRQ0+IRQ_TIMER && myproc()->ticks == 0) {
+    yield();
+  }
 #else
   if(myproc() && myproc()->state == RUNNING &&
      tf->trapno == T_IRQ0+IRQ_TIMER) {

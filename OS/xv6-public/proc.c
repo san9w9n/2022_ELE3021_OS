@@ -673,3 +673,27 @@ release_ptable_lock(void)
 {
   release(&ptable.lock);
 }
+
+int
+thread_create(thread_t *thread, void *start_routine, void* arg)
+{
+  return -1;
+}
+
+// Exit the thread
+void 
+thread_exit(void *retval)
+{
+  // TODO
+  cprintf("Currently not supported\n");
+}
+
+
+// Join the thread
+int
+thread_join(thread_t thread, void **retval)
+{
+  // TODO
+  cprintf("Currently not supported\n");
+  return -1;
+}
