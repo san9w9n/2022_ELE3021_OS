@@ -18,6 +18,9 @@ exec(char *path, char **argv)
   struct proghdr ph;
   pde_t *pgdir, *oldpgdir;
   struct proc *curproc = myproc();
+#if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
+  struct thd *t;
+#endif
 
   begin_op();
 
@@ -97,8 +100,29 @@ exec(char *path, char **argv)
   oldpgdir = curproc->pgdir;
   curproc->pgdir = pgdir;
   curproc->sz = sz;
+
+#if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
+  curproc->ustacks[0] = sz;
+  *MAINTHD(curproc) = *CURTHD(curproc);
+  if(curproc->tid > 0)
+    CURTHD(curproc)->kstack = 0;
+  for(i = 1; i < NTHREAD; i++){
+    t = &curproc->thds[i];
+    if (t->kstack)
+      kfree(t->kstack);
+    t->kstack = 0;
+    t->state = UNUSED;
+    t->tid = 0;
+    t->retval = 0;
+    curproc->ustacks[i] = 0;
+  }
+  MAINTHD(curproc)->tf->eip = elf.entry;
+  MAINTHD(curproc)->tf->esp = sp;
+  curproc->tid = 0;
+#else
   curproc->tf->eip = elf.entry;  // main
   curproc->tf->esp = sp;
+#endif
   switchuvm(curproc);
   freevm(oldpgdir);
   return 0;

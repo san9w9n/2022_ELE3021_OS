@@ -49,7 +49,11 @@ fetchstr(uint addr, char **pp)
 int
 argint(int n, int *ip)
 {
-  return fetchint((myproc()->tf->esp) + 4 + 4*n, ip);
+#if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
+  return fetchint((CURTHD(myproc())->tf->esp) + 4 + 4 * n, ip);
+#else
+  return fetchint((myproc()->tf->esp) + 4 + 4 * n, ip);
+#endif
 }
 
 // Fetch the nth word-sized system call argument as a pointer
@@ -150,12 +154,26 @@ syscall(void)
   int num;
   struct proc *curproc = myproc();
 
+#if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
+  struct thd *curthd = CURTHD(curproc);
+
+  num = curthd->tf->eax;
+  if(num > 0 && num < NELEM(syscalls) && syscalls[num])
+    curthd->tf->eax = syscalls[num]();
+  else{
+    cprintf("%d %s: unknown sys call %d\n",
+            curproc->pid, curproc->name, num);
+    curthd->tf->eax = -1;
+  }
+#else
   num = curproc->tf->eax;
-  if(num > 0 && num < NELEM(syscalls) && syscalls[num]) {
+  if(num > 0 && num < NELEM(syscalls) && syscalls[num]){
     curproc->tf->eax = syscalls[num]();
-  } else {
+  }
+  else{
     cprintf("%d %s: unknown sys call %d\n",
             curproc->pid, curproc->name, num);
     curproc->tf->eax = -1;
   }
+#endif
 }

@@ -158,8 +158,13 @@ switchuvm(struct proc *p)
 {
   if(p == 0)
     panic("switchuvm: no process");
+#if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
+  if (CURTHD(p)->kstack == 0)
+    panic("switchuvm: no kstack");
+#else
   if(p->kstack == 0)
     panic("switchuvm: no kstack");
+#endif
   if(p->pgdir == 0)
     panic("switchuvm: no pgdir");
 
@@ -168,7 +173,11 @@ switchuvm(struct proc *p)
                                 sizeof(mycpu()->ts)-1, 0);
   mycpu()->gdt[SEG_TSS].s = 0;
   mycpu()->ts.ss0 = SEG_KDATA << 3;
+#if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
+  mycpu()->ts.esp0 = (uint)CURTHD(p)->kstack + KSTACKSIZE;
+#else
   mycpu()->ts.esp0 = (uint)p->kstack + KSTACKSIZE;
+#endif
   // setting IOPL=0 in eflags *and* iomb beyond the tss segment limit
   // forbids I/O instructions (e.g., inb and outb) from user space
   mycpu()->ts.iomb = (ushort) 0xFFFF;
@@ -391,4 +400,3 @@ copyout(pde_t *pgdir, uint va, void *p, uint len)
 // Blank page.
 //PAGEBREAK!
 // Blank page.
-

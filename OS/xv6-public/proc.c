@@ -13,8 +13,8 @@ struct {
 } ptable;
 
 static struct proc *initproc;
-
 int nextpid = 1;
+int nexttid = 1;
 extern void forkret(void);
 extern void trapret(void);
 
@@ -74,6 +74,9 @@ static struct proc*
 allocproc(void)
 {
   struct proc *p;
+#if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
+  struct thd *t;
+#endif
   char *sp;
 
   acquire(&ptable.lock);
@@ -95,10 +98,15 @@ found:
   p->levelOfQueue = 0;
   p->priority = 0;
   p->ticks = 0;
+#else
+  t = MAINTHD(p);
+  t->state = EMBRYO;
+  t->tid = nexttid++;
 #endif
 
   release(&ptable.lock);
 
+#if defined(MULTILEVEL_SCHED) || defined(MLFQ_SCHED)
   // Allocate kernel stack.
   if((p->kstack = kalloc()) == 0){
     p->state = UNUSED;
@@ -119,7 +127,26 @@ found:
   p->context = (struct context*)sp;
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
+#else
+  if(!(t->kstack = kalloc())){
+    p->state = UNUSED;
+    t->state = UNUSED;
+    return 0;
+  }
+  sp = t->kstack + KSTACKSIZE;
 
+  sp -= sizeof *(t->tf);
+  t->tf = (struct trapframe *)sp;
+  sp -= 4;
+  *(uint *)sp = (uint)trapret;
+
+  sp -= sizeof *(t->context);
+  t->context = (struct context *)sp;
+  memset(t->context, 0, sizeof *(t->context));
+  t->context->eip = (uint)forkret;
+
+  p->tid = 0;
+#endif
   return p;
 }
 
@@ -128,27 +155,47 @@ found:
 void
 userinit(void)
 {
+#if defined(MULTILEVEL_SCHED) || defined(MLFQ_SCHED)
+  struct proc *target;
+#else
   struct proc *p;
+  struct thd *target;
+#endif
   extern char _binary_initcode_start[], _binary_initcode_size[];
 
+#if defined(MULTILEVEL_SCHED) || defined(MLFQ_SCHED)
+  target = allocproc();
+  initproc = target;
+  if((target->pgdir = setupkvm()) == 0)
+    panic("userinit: out of memory?");
+  inituvm(target->pgdir, _binary_initcode_start, (int)_binary_initcode_size);
+  target->sz = PGSIZE;
+#else
   p = allocproc();
-  
+  target = MAINTHD(p);
   initproc = p;
   if((p->pgdir = setupkvm()) == 0)
     panic("userinit: out of memory?");
   inituvm(p->pgdir, _binary_initcode_start, (int)_binary_initcode_size);
   p->sz = PGSIZE;
-  memset(p->tf, 0, sizeof(*p->tf));
-  p->tf->cs = (SEG_UCODE << 3) | DPL_USER;
-  p->tf->ds = (SEG_UDATA << 3) | DPL_USER;
-  p->tf->es = p->tf->ds;
-  p->tf->ss = p->tf->ds;
-  p->tf->eflags = FL_IF;
-  p->tf->esp = PGSIZE;
-  p->tf->eip = 0;  // beginning of initcode.S
+#endif
+  
+  memset(target->tf, 0, sizeof(*target->tf));
+  target->tf->cs = (SEG_UCODE << 3) | DPL_USER;
+  target->tf->ds = (SEG_UDATA << 3) | DPL_USER;
+  target->tf->es = target->tf->ds;
+  target->tf->ss = target->tf->ds;
+  target->tf->eflags = FL_IF;
+  target->tf->esp = PGSIZE;
+  target->tf->eip = 0;  // beginning of initcode.S
 
+#if defined(MULTILEVEL_SCHED) || defined(MLFQ_SCHED)
+  safestrcpy(target->name, "initcode", sizeof(target->name));
+  target->cwd = namei("/");
+#else
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
+#endif
 
   // this assignment to p->state lets other cores
   // run this process. the acquire forces the above
@@ -156,7 +203,10 @@ userinit(void)
   // because the assignment might not be atomic.
   acquire(&ptable.lock);
 
+#if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
   p->state = RUNNABLE;
+#endif
+  target->state = RUNNABLE;
 
   release(&ptable.lock);
 }
@@ -169,6 +219,10 @@ growproc(int n)
   uint sz;
   struct proc *curproc = myproc();
 
+#if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
+  acquire(&ptable.lock);
+#endif
+
   sz = curproc->sz;
   if(n > 0){
     if((sz = allocuvm(curproc->pgdir, sz, sz + n)) == 0)
@@ -179,6 +233,10 @@ growproc(int n)
   }
   curproc->sz = sz;
   switchuvm(curproc);
+
+#if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
+  release(&ptable.lock);
+#endif
   return 0;
 }
 
@@ -192,12 +250,10 @@ fork(void)
   struct proc *np;
   struct proc *curproc = myproc();
 
-  // Allocate process.
-  if((np = allocproc()) == 0){
+#if defined(MULTILEVEL_SCHED) || defined(MLFQ_SCHED)
+  if((np = allocproc()) == 0)
     return -1;
-  }
 
-  // Copy process state from proc.
   if((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0){
     kfree(np->kstack);
     np->kstack = 0;
@@ -208,9 +264,38 @@ fork(void)
   np->parent = curproc;
   *np->tf = *curproc->tf;
 
-  // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
 
+  for(i = 0; i < NOFILE; i++)
+    if(curproc->ofile[i])
+      np->ofile[i] = filedup(curproc->ofile[i]);
+  np->cwd = idup(curproc->cwd);
+
+  safestrcpy(np->name, curproc->name, sizeof(curproc->name));
+  pid = np->pid;
+
+  acquire(&ptable.lock);
+  np->state = RUNNABLE;
+  release(&ptable.lock);
+#else
+  struct thd *nt;
+
+  if((np = allocproc()) == 0)
+    return -1;
+  
+  nt = MAINTHD(np);
+  if((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0){
+    kfree(nt->kstack);
+    nt->kstack = 0;
+    np->state = UNUSED;
+    nt->state = UNUSED;
+    return -1;
+  }
+  np->sz = curproc->sz;
+  np->parent = curproc;
+  *(nt->tf) = *(CURTHD(curproc)->tf);
+
+  nt->tf->eax = 0;
   for(i = 0; i < NOFILE; i++)
     if(curproc->ofile[i])
       np->ofile[i] = filedup(curproc->ofile[i]);
@@ -223,9 +308,15 @@ fork(void)
   acquire(&ptable.lock);
 
   np->state = RUNNABLE;
+  nt->state = RUNNABLE;
+
+  for(i = 0; i < NTHREAD; i++)
+    np->ustacks[i] = curproc->ustacks[i];
+  np->ustacks[0] = curproc->ustacks[curproc->tid];
+  np->ustacks[curproc->tid] = curproc->ustacks[0];
 
   release(&ptable.lock);
-
+#endif
   return pid;
 }
 
@@ -237,6 +328,9 @@ exit(void)
 {
   struct proc *curproc = myproc();
   struct proc *p;
+#if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
+  struct thd *t;
+#endif
   int fd;
 
   if(curproc == initproc)
@@ -257,10 +351,8 @@ exit(void)
 
   acquire(&ptable.lock);
 
-  // Parent might be sleeping in wait().
   wakeup1(curproc->parent);
 
-  // Pass abandoned children to init.
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->parent == curproc){
       p->parent = initproc;
@@ -269,8 +361,13 @@ exit(void)
     }
   }
 
-  // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
+#if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
+  for(t = curproc->thds; t < &curproc->thds[NTHREAD]; t++){
+    if(t->state != UNUSED)
+      t->state = ZOMBIE;
+  }
+#endif
   sched();
   panic("zombie exit");
 }
@@ -281,6 +378,10 @@ int
 wait(void)
 {
   struct proc *p;
+#if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
+  struct thd *t;
+  int i;
+#endif
   int havekids, pid;
   struct proc *curproc = myproc();
   
@@ -293,19 +394,31 @@ wait(void)
         continue;
       havekids = 1;
       if(p->state == ZOMBIE){
-        // Found one.
-        pid = p->pid;
+#if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
+        for(i = 0; i < NTHREAD; i++){
+          t = &p->thds[i];
+          t->tid = 0;
+          t->state = UNUSED;
+          p->ustacks[i] = 0;
+          if(t->kstack) {
+            kfree(t->kstack);
+            t->kstack = 0;
+          }
+        }
+#else
         kfree(p->kstack);
         p->kstack = 0;
+        p->levelOfQueue = 0;
+        p->ticks = 0;
+        p->priority = 0;
+#endif
+        pid = p->pid;
         freevm(p->pgdir);
         p->pid = 0;
         p->parent = 0;
         p->name[0] = 0;
         p->killed = 0;
         p->state = UNUSED;
-        p->levelOfQueue = 0;
-        p->ticks = 0;
-        p->priority = 0;
         release(&ptable.lock);
         return pid;
       }
@@ -338,7 +451,6 @@ scheduler(void)
   c->proc = 0;
   
   for(;;){
-    // Enable interrupts on this processor.
     sti();
 
     // Loop over process table looking for process to run.
@@ -421,17 +533,29 @@ scheduler(void)
       c->proc = 0;
     }
 #else
+    struct thd *t;
+    int infinity;
+
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      infinity = 0;
       if(p->state != RUNNABLE)
         continue;
-      c->proc = p;
-      switchuvm(p);
-      p->state = RUNNING;
-      // cprintf("ticks = %d, pid = %d, name = %s\n", ticks, p->pid, p->name);
-      swtch(&(c->scheduler), p->context);
-      switchkvm();
-
-      c->proc = 0;
+      for(t = CURTHD(p); ; t++){
+        if(t == &p->thds[NTHREAD])
+          t = MAINTHD(p);
+        if(t->state == RUNNABLE){
+          p->tid = t - p->thds;
+          c->proc = p;
+          switchuvm(p);
+          t->state = RUNNING;
+          swtch(&(c->scheduler), t->context);
+          switchkvm();
+          c->proc = 0;
+        }
+        if (infinity && t == CURTHD(p))
+          break;
+        infinity = 1;
+      }
     }
 #endif
     release(&ptable.lock);
@@ -450,17 +574,29 @@ sched(void)
 {
   int intena;
   struct proc *p = myproc();
+#if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
+  struct thd *t = CURTHD(p);
+#endif
 
   if(!holding(&ptable.lock))
     panic("sched ptable.lock");
   if(mycpu()->ncli != 1)
     panic("sched locks");
+#if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
+  if(t->state == RUNNING)
+    panic("sched running");
+#else
   if(p->state == RUNNING)
     panic("sched running");
+#endif
   if(readeflags()&FL_IF)
     panic("sched interruptible");
   intena = mycpu()->intena;
-  swtch(&p->context, mycpu()->scheduler);
+#if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
+  swtch(&(t->context), mycpu()->scheduler);
+#else
+  swtch(&(p->context), mycpu()->scheduler);
+#endif
   mycpu()->intena = intena;
 }
 
@@ -474,6 +610,9 @@ yield(void)
   acquire(&ptable.lock);  //DOC: yieldlock
   p = myproc();
   p->state = RUNNABLE;
+#if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
+  CURTHD(p)->state = RUNNABLE;
+#endif
   sched();
   release(&ptable.lock);
 }
@@ -523,13 +662,18 @@ sleep(void *chan, struct spinlock *lk)
     release(lk);
   }
   // Go to sleep.
+#if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
+  struct thd *t = CURTHD(p);
+  t->chan = chan;
+  t->state = SLEEPING;
+  sched();
+  t->chan = 0;
+#else
   p->chan = chan;
   p->state = SLEEPING;
-
   sched();
-
-  // Tidy up.
   p->chan = 0;
+#endif
 
   // Reacquire original lock.
   if(lk != &ptable.lock){  //DOC: sleeplock2
@@ -545,10 +689,18 @@ static void
 wakeup1(void *chan)
 {
   struct proc *p;
-
+#if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
+  struct thd *t;
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+    if(p->state == RUNNABLE)
+      for(t = p->thds; t < &p->thds[NTHREAD]; t++)
+        if(t->state == SLEEPING && t->chan == chan)
+          t->state = RUNNABLE;
+#else
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
     if(p->state == SLEEPING && p->chan == chan)
       p->state = RUNNABLE;
+#endif
 }
 
 // Wake up all processes sleeping on chan.
@@ -572,9 +724,14 @@ kill(int pid)
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->pid == pid){
       p->killed = 1;
-      // Wake process from sleep if necessary.
+#if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
+      for(struct thd* t = p->thds; t < &p->thds[NTHREAD]; t++)
+        if(t->state == SLEEPING)
+          t->state = RUNNABLE;
+#else
       if(p->state == SLEEPING)
         p->state = RUNNABLE;
+#endif
       release(&ptable.lock);
       return 0;
     }
@@ -612,7 +769,11 @@ procdump(void)
       state = "???";
     cprintf("%d %s %s", p->pid, state, p->name);
     if(p->state == SLEEPING){
+#if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
+      getcallerpcs((uint *)CURTHD(p)->context->ebp + 2, pc);
+#else
       getcallerpcs((uint*)p->context->ebp+2, pc);
+#endif
       for(i=0; i<10 && pc[i] != 0; i++)
         cprintf(" %p", pc[i]);
     }
@@ -623,13 +784,21 @@ procdump(void)
 int 
 getlev(void)
 {
-  if(myproc()) return myproc()->levelOfQueue;
+#if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
+  panic("Can not call getlev.");
+#else
+  if (myproc())
+    return myproc()->levelOfQueue;
+#endif
   return -1;
 }
 
 int
 setpriority(int pid, int priority)
 {
+#if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
+  panic("Can not call setpriority.");
+#else
   struct proc *parent, *p;
 
   if(priority < 0 || priority > 10)
@@ -645,6 +814,7 @@ setpriority(int pid, int priority)
     }
   }
   release(&ptable.lock);
+#endif
   return -1;
 }
 
@@ -652,6 +822,9 @@ setpriority(int pid, int priority)
 void
 priority_boosting(void)
 {
+#if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
+  panic("Can not call priority_boosting.");
+#else
   struct proc *p;
 
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
@@ -660,6 +833,7 @@ priority_boosting(void)
       p->ticks = 0;
     }
   }
+#endif
 }
 
 inline void
@@ -674,26 +848,133 @@ release_ptable_lock(void)
   release(&ptable.lock);
 }
 
-int
-thread_create(thread_t *thread, void *start_routine, void* arg)
+int 
+thread_create(thread_t *thread, void *start_routine, void *arg)
 {
+#if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
+  struct proc *curproc = myproc();
+  struct thd *t;
+  char *sp;
+  uint sz;
+  int tidx;
+
+  acquire(&ptable.lock);
+  for(tidx = 0; tidx < NTHREAD; tidx++)
+    if((t = &curproc->thds[tidx])->state == UNUSED)
+      goto found;
+  release(&ptable.lock);
+
+  return -1;
+
+found:
+  t->state = EMBRYO;
+  t->tid = nexttid++;
+
+  if ((t->kstack = kalloc()) == 0)
+    goto bad;
+  sp = t->kstack + KSTACKSIZE;
+
+  sp -= sizeof *t->tf;
+  t->tf = (struct trapframe *)sp;
+  *t->tf = *(CURTHD(curproc)->tf);
+
+  sp -= 4;
+  *(uint *)sp = (uint)trapret;
+
+  sp -= sizeof *t->context;
+  t->context = (struct context *)sp;
+  memset(t->context, 0, sizeof *t->context);
+  t->context->eip = (uint)forkret;
+
+  if(!curproc->ustacks[tidx]){
+    sz = PGROUNDUP(curproc->sz);
+    if(!(sz = allocuvm(curproc->pgdir, sz, sz + PGSIZE)))
+      goto bad;
+    curproc->ustacks[tidx] = sz;
+    curproc->sz = sz;
+  }
+  sp = (char *)curproc->ustacks[tidx];
+
+  sp -= 4;
+  *(uint *)sp = (uint)arg;
+  sp -= 4;
+  *(uint *)sp = 0xffffffff;
+
+  t->tf->eip = (uint)start_routine;
+  t->tf->esp = (uint)sp;
+
+  *thread = t->tid;
+  t->state = RUNNABLE;
+  release(&ptable.lock);
+
+  return 0;
+
+bad:
+  t->kstack = 0;
+  t->tid = 0;
+  t->state = UNUSED;
+
+  release(&ptable.lock);
+#else
+  panic("Cannot call thread_create.");
+#endif
   return -1;
 }
 
-// Exit the thread
 void 
 thread_exit(void *retval)
 {
-  // TODO
-  cprintf("Currently not supported\n");
+#if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
+  struct proc *curproc = myproc();
+  struct thd *curthd = CURTHD(curproc);
+
+  acquire(&ptable.lock);
+  wakeup1((void *)curthd->tid);
+  curthd->retval = retval;
+  curthd->state = ZOMBIE;
+  sched();
+  panic("zombie exit");
+#else
+  panic("Cannot call thread_exit.");
+#endif
 }
 
-
-// Join the thread
-int
+int 
 thread_join(thread_t thread, void **retval)
 {
-  // TODO
-  cprintf("Currently not supported\n");
+#if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
+  struct proc *p;
+  struct thd *t;
+
+  acquire(&ptable.lock);
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+    if(p->state == RUNNABLE)
+      for(t = p->thds; t < &p->thds[NTHREAD]; t++)
+        if(t->state != UNUSED && t->tid == thread)
+          goto found;
+  release(&ptable.lock);
   return -1;
+
+found:
+  if (t->state != ZOMBIE)
+  {
+    sleep((void *)thread, &ptable.lock);
+  }
+
+  if (retval != 0)
+    *retval = t->retval;
+
+  kfree(t->kstack);
+  t->kstack = 0;
+  t->retval = 0;
+  t->tid = 0;
+  t->state = UNUSED;
+
+  release(&ptable.lock);
+
+  return 0;
+#else
+  panic("Cannot call thread_join.");
+  return -1;
+#endif
 }

@@ -43,7 +43,11 @@ trap(struct trapframe *tf)
   if(tf->trapno == T_SYSCALL){
     if(myproc()->killed)
       exit();
+#if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
+    CURTHD(myproc())->tf = tf;
+#else
     myproc()->tf = tf;
+#endif
     syscall();
     if(myproc()->killed)
       exit();
