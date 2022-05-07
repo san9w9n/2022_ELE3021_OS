@@ -34,7 +34,6 @@ struct context {
 
 enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 #if defined(MULTILEVEL_SCHED) || defined(MLFQ_SCHED)
-
 struct proc {
   uint sz;                    // Size of process memory (bytes)
   pde_t *pgdir;               // Page table
@@ -58,6 +57,7 @@ struct thd {
   thread_t tid;
   struct proc *parent;
   char *kstack;
+  uint stackpoint;
   enum procstate state;
   struct trapframe *tf;
   struct context *context;
@@ -75,12 +75,12 @@ struct proc {
   struct file *ofile[NOFILE]; // Open files
   struct inode *cwd;          // Current directory
   char name[16];              // Process name (debugging)
-  struct thd thds[NTHREAD];
-  uint ustacks[NTHREAD];
   thread_t tid;
+  struct thd thds[NTHREAD];
 };
 
 #define MAINTHD(P) ((P)->thds)
 #define CURTHD(P)  (&((P)->thds[(P)->tid]))
+#define THDADDR(P, i) (&((P)->thds[i]))
 
 #endif

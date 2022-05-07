@@ -311,9 +311,9 @@ fork(void)
   nt->state = RUNNABLE;
 
   for(i = 0; i < NTHREAD; i++)
-    np->ustacks[i] = curproc->ustacks[i];
-  np->ustacks[0] = curproc->ustacks[curproc->tid];
-  np->ustacks[curproc->tid] = curproc->ustacks[0];
+    THDADDR(np, i)->stackpoint = THDADDR(curproc, i)->stackpoint;
+  MAINTHD(np)->stackpoint = CURTHD(curproc)->stackpoint;
+  CURTHD(np)->stackpoint = MAINTHD(curproc)->stackpoint;
 
   release(&ptable.lock);
 #endif
@@ -363,7 +363,7 @@ exit(void)
 
   curproc->state = ZOMBIE;
 #if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
-  for(t = curproc->thds; t < &curproc->thds[NTHREAD]; t++){
+  for(t = MAINTHD(curproc); t != THDADDR(curproc, NTHREAD); t++){
     if(t->state != UNUSED)
       t->state = ZOMBIE;
   }
@@ -396,10 +396,10 @@ wait(void)
       if(p->state == ZOMBIE){
 #if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
         for(i = 0; i < NTHREAD; i++){
-          t = &p->thds[i];
+          t = THDADDR(p, i);
           t->tid = 0;
           t->state = UNUSED;
-          p->ustacks[i] = 0;
+          t->stackpoint = 0;
           if(t->kstack) {
             kfree(t->kstack);
             t->kstack = 0;
@@ -541,7 +541,7 @@ scheduler(void)
       if(p->state != RUNNABLE)
         continue;
       for(t = CURTHD(p); ; t++){
-        if(t == &p->thds[NTHREAD])
+        if(t == THDADDR(p, NTHREAD))
           t = MAINTHD(p);
         if(t->state == RUNNABLE){
           p->tid = t - p->thds;
@@ -691,9 +691,9 @@ wakeup1(void *chan)
   struct proc *p;
 #if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
   struct thd *t;
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+  for(p = ptable.proc; p != &ptable.proc[NPROC]; p++)
     if(p->state == RUNNABLE)
-      for(t = p->thds; t < &p->thds[NTHREAD]; t++)
+      for(t = MAINTHD(p); t != THDADDR(p, NTHREAD); t++)
         if(t->state == SLEEPING && t->chan == chan)
           t->state = RUNNABLE;
 #else
@@ -725,7 +725,7 @@ kill(int pid)
     if(p->pid == pid){
       p->killed = 1;
 #if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
-      for(struct thd* t = p->thds; t < &p->thds[NTHREAD]; t++)
+      for(struct thd* t = MAINTHD(p); t != THDADDR(p, NTHREAD); t++)
         if(t->state == SLEEPING)
           t->state = RUNNABLE;
 #else
@@ -860,7 +860,7 @@ thread_create(thread_t *thread, void *start_routine, void *arg)
 
   acquire(&ptable.lock);
   for(tidx = 0; tidx < NTHREAD; tidx++)
-    if((t = &curproc->thds[tidx])->state == UNUSED)
+    if((t = THDADDR(curproc, tidx))->state == UNUSED)
       goto found;
   release(&ptable.lock);
 
@@ -886,14 +886,14 @@ found:
   memset(t->context, 0, sizeof *t->context);
   t->context->eip = (uint)forkret;
 
-  if(!curproc->ustacks[tidx]){
+  if(!t->stackpoint){
     sz = PGROUNDUP(curproc->sz);
     if(!(sz = allocuvm(curproc->pgdir, sz, sz + PGSIZE)))
       goto bad;
-    curproc->ustacks[tidx] = sz;
+    t->stackpoint = sz;
     curproc->sz = sz;
   }
-  sp = (char *)curproc->ustacks[tidx];
+  sp = (char *)t->stackpoint;
 
   sp -= 4;
   *(uint *)sp = (uint)arg;
@@ -947,9 +947,9 @@ thread_join(thread_t thread, void **retval)
   struct thd *t;
 
   acquire(&ptable.lock);
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+  for(p = ptable.proc; p != &ptable.proc[NPROC]; p++)
     if(p->state == RUNNABLE)
-      for(t = p->thds; t < &p->thds[NTHREAD]; t++)
+      for(t = MAINTHD(p); t != THDADDR(p, NTHREAD); t++)
         if(t->state != UNUSED && t->tid == thread)
           goto found;
   release(&ptable.lock);
