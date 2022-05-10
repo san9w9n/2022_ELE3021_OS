@@ -55,9 +55,7 @@ struct proc {
 #else
 struct thd {
   thread_t tid;
-  struct proc *parent;
   char *kstack;
-  uint stackpoint;
   enum procstate state;
   struct trapframe *tf;
   struct context *context;

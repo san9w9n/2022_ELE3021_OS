@@ -106,7 +106,26 @@ found:
 
   release(&ptable.lock);
 
-#if defined(MULTILEVEL_SCHED) || defined(MLFQ_SCHED)
+#if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
+  if(!(t->kstack = kalloc())){
+    p->state = UNUSED;
+    t->state = UNUSED;
+    return 0;
+  }
+  sp = t->kstack + KSTACKSIZE;
+
+  sp -= sizeof *(t->tf);
+  t->tf = (struct trapframe *)sp;
+  sp -= 4;
+  *(uint *)sp = (uint)trapret;
+
+  sp -= sizeof *(t->context);
+  t->context = (struct context *)sp;
+  memset(t->context, 0, sizeof *(t->context));
+  t->context->eip = (uint)forkret;
+
+  p->tid = 0;
+#else
   // Allocate kernel stack.
   if((p->kstack = kalloc()) == 0){
     p->state = UNUSED;
@@ -127,25 +146,6 @@ found:
   p->context = (struct context*)sp;
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
-#else
-  if(!(t->kstack = kalloc())){
-    p->state = UNUSED;
-    t->state = UNUSED;
-    return 0;
-  }
-  sp = t->kstack + KSTACKSIZE;
-
-  sp -= sizeof *(t->tf);
-  t->tf = (struct trapframe *)sp;
-  sp -= 4;
-  *(uint *)sp = (uint)trapret;
-
-  sp -= sizeof *(t->context);
-  t->context = (struct context *)sp;
-  memset(t->context, 0, sizeof *(t->context));
-  t->context->eip = (uint)forkret;
-
-  p->tid = 0;
 #endif
   return p;
 }
@@ -163,14 +163,7 @@ userinit(void)
 #endif
   extern char _binary_initcode_start[], _binary_initcode_size[];
 
-#if defined(MULTILEVEL_SCHED) || defined(MLFQ_SCHED)
-  target = allocproc();
-  initproc = target;
-  if((target->pgdir = setupkvm()) == 0)
-    panic("userinit: out of memory?");
-  inituvm(target->pgdir, _binary_initcode_start, (int)_binary_initcode_size);
-  target->sz = PGSIZE;
-#else
+#if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
   p = allocproc();
   target = MAINTHD(p);
   initproc = p;
@@ -178,6 +171,13 @@ userinit(void)
     panic("userinit: out of memory?");
   inituvm(p->pgdir, _binary_initcode_start, (int)_binary_initcode_size);
   p->sz = PGSIZE;
+#else
+  target = allocproc();
+  initproc = target;
+  if((target->pgdir = setupkvm()) == 0)
+    panic("userinit: out of memory?");
+  inituvm(target->pgdir, _binary_initcode_start, (int)_binary_initcode_size);
+  target->sz = PGSIZE;
 #endif
   
   memset(target->tf, 0, sizeof(*target->tf));
@@ -189,12 +189,12 @@ userinit(void)
   target->tf->esp = PGSIZE;
   target->tf->eip = 0;  // beginning of initcode.S
 
-#if defined(MULTILEVEL_SCHED) || defined(MLFQ_SCHED)
-  safestrcpy(target->name, "initcode", sizeof(target->name));
-  target->cwd = namei("/");
-#else
+#if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
+#else
+  safestrcpy(target->name, "initcode", sizeof(target->name));
+  target->cwd = namei("/");
 #endif
 
   // this assignment to p->state lets other cores
@@ -278,24 +278,24 @@ fork(void)
   np->state = RUNNABLE;
   release(&ptable.lock);
 #else
-  struct thd *nt;
+  struct thd *main_thd;
 
   if((np = allocproc()) == 0)
     return -1;
   
-  nt = MAINTHD(np);
+  main_thd = MAINTHD(np);
   if((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0){
-    kfree(nt->kstack);
-    nt->kstack = 0;
+    kfree(main_thd->kstack);
+    main_thd->kstack = 0;
     np->state = UNUSED;
-    nt->state = UNUSED;
+    main_thd->state = UNUSED;
     return -1;
   }
   np->sz = curproc->sz;
   np->parent = curproc;
-  *(nt->tf) = *(CURTHD(curproc)->tf);
+  *(main_thd->tf) = *(CURTHD(curproc)->tf);
 
-  nt->tf->eax = 0;
+  main_thd->tf->eax = 0;
   for(i = 0; i < NOFILE; i++)
     if(curproc->ofile[i])
       np->ofile[i] = filedup(curproc->ofile[i]);
@@ -308,13 +308,7 @@ fork(void)
   acquire(&ptable.lock);
 
   np->state = RUNNABLE;
-  nt->state = RUNNABLE;
-
-  for(i = 0; i < NTHREAD; i++)
-    THDADDR(np, i)->stackpoint = THDADDR(curproc, i)->stackpoint;
-  MAINTHD(np)->stackpoint = CURTHD(curproc)->stackpoint;
-  CURTHD(np)->stackpoint = MAINTHD(curproc)->stackpoint;
-
+  main_thd->state = RUNNABLE;
   release(&ptable.lock);
 #endif
   return pid;
@@ -399,7 +393,6 @@ wait(void)
           t = THDADDR(p, i);
           t->tid = 0;
           t->state = UNUSED;
-          t->stackpoint = 0;
           if(t->kstack) {
             kfree(t->kstack);
             t->kstack = 0;
@@ -691,11 +684,13 @@ wakeup1(void *chan)
   struct proc *p;
 #if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
   struct thd *t;
-  for(p = ptable.proc; p != &ptable.proc[NPROC]; p++)
-    if(p->state == RUNNABLE)
-      for(t = MAINTHD(p); t != THDADDR(p, NTHREAD); t++)
-        if(t->state == SLEEPING && t->chan == chan)
-          t->state = RUNNABLE;
+  for(p = ptable.proc; p != &ptable.proc[NPROC]; p++) {
+    if(p->state != RUNNABLE)
+      continue;
+    for(t = MAINTHD(p); t != THDADDR(p, NTHREAD); t++)
+      if(t->state == SLEEPING && t->chan == chan)
+        t->state = RUNNABLE;
+  }
 #else
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
     if(p->state == SLEEPING && p->chan == chan)
@@ -769,9 +764,7 @@ procdump(void)
       state = "???";
     cprintf("%d %s %s", p->pid, state, p->name);
     if(p->state == SLEEPING){
-#if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
-      getcallerpcs((uint *)CURTHD(p)->context->ebp + 2, pc);
-#else
+#if defined(MULTILEVEL_SCHED) || defined(MLFQ_SCHED)
       getcallerpcs((uint*)p->context->ebp+2, pc);
 #endif
       for(i=0; i<10 && pc[i] != 0; i++)
@@ -852,11 +845,10 @@ int
 thread_create(thread_t *thread, void *start_routine, void *arg)
 {
 #if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
-  struct proc *curproc = myproc();
-  struct thd *t;
-  char *sp;
-  uint sz;
+  uint sz, sp;
   int tidx;
+  struct thd *t;
+  struct proc *curproc = myproc();
 
   acquire(&ptable.lock);
   for(tidx = 0; tidx < NTHREAD; tidx++)
@@ -869,10 +861,11 @@ thread_create(thread_t *thread, void *start_routine, void *arg)
 found:
   t->state = EMBRYO;
   t->tid = nexttid++;
+  *thread = t->tid;
 
   if ((t->kstack = kalloc()) == 0)
     goto bad;
-  sp = t->kstack + KSTACKSIZE;
+  sp = (uint)(t->kstack + KSTACKSIZE);
 
   sp -= sizeof *t->tf;
   t->tf = (struct trapframe *)sp;
@@ -886,15 +879,11 @@ found:
   memset(t->context, 0, sizeof *t->context);
   t->context->eip = (uint)forkret;
 
-  if(!t->stackpoint){
-    sz = PGROUNDUP(curproc->sz);
-    if(!(sz = allocuvm(curproc->pgdir, sz, sz + PGSIZE)))
-      goto bad;
-    t->stackpoint = sz;
-    curproc->sz = sz;
-  }
-  sp = (char *)t->stackpoint;
-
+  sz = PGROUNDUP(curproc->sz);
+  if(!(sz = allocuvm(curproc->pgdir, sz, sz + PGSIZE)))
+    goto bad;
+  curproc->sz = sz;
+  sp = sz;
   sp -= 4;
   *(uint *)sp = (uint)arg;
   sp -= 4;
@@ -902,8 +891,6 @@ found:
 
   t->tf->eip = (uint)start_routine;
   t->tf->esp = (uint)sp;
-
-  *thread = t->tid;
   t->state = RUNNABLE;
   release(&ptable.lock);
 
@@ -913,6 +900,7 @@ bad:
   t->kstack = 0;
   t->tid = 0;
   t->state = UNUSED;
+  *thread = -1;
 
   release(&ptable.lock);
 #else
@@ -947,17 +935,18 @@ thread_join(thread_t thread, void **retval)
   struct thd *t;
 
   acquire(&ptable.lock);
-  for(p = ptable.proc; p != &ptable.proc[NPROC]; p++)
-    if(p->state == RUNNABLE)
-      for(t = MAINTHD(p); t != THDADDR(p, NTHREAD); t++)
-        if(t->state != UNUSED && t->tid == thread)
-          goto found;
+  for(p = ptable.proc; p != &ptable.proc[NPROC]; p++) {
+    if(p->state != RUNNABLE)
+      continue;
+    for(t = MAINTHD(p); t != THDADDR(p, NTHREAD); t++)
+      if(t->state != UNUSED && t->tid == thread)
+        goto found;
+  }
   release(&ptable.lock);
   return -1;
 
 found:
-  if (t->state != ZOMBIE)
-  {
+  if(t->state != ZOMBIE){
     sleep((void *)thread, &ptable.lock);
   }
 

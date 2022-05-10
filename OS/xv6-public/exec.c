@@ -102,7 +102,6 @@ exec(char *path, char **argv)
   curproc->sz = sz;
 
 #if !defined(MULTILEVEL_SCHED) && !defined(MLFQ_SCHED)
-  MAINTHD(curproc)->stackpoint = sz;
   *MAINTHD(curproc) = *CURTHD(curproc);
   if(curproc->tid > 0)
     CURTHD(curproc)->kstack = 0;
@@ -114,13 +113,12 @@ exec(char *path, char **argv)
     t->state = UNUSED;
     t->tid = 0;
     t->retval = 0;
-    t->stackpoint = 0;
   }
   MAINTHD(curproc)->tf->eip = elf.entry;
   MAINTHD(curproc)->tf->esp = sp;
   curproc->tid = 0;
 #else
-  curproc->tf->eip = elf.entry;  // main
+  curproc->tf->eip = elf.entry;
   curproc->tf->esp = sp;
 #endif
   switchuvm(curproc);
