@@ -1,0 +1,27 @@
+#include "types.h"
+#include "defs.h"
+#include "param.h"
+#include "stat.h"
+#include "mmu.h"
+#include "proc.h"
+#include "fs.h"
+#include "spinlock.h"
+#include "sleeplock.h"
+#include "file.h"
+#include "fcntl.h"
+
+int sys_addUser(void) {
+  char *username, *password;
+  if(argstr(0, &username) < 0)
+    return -1;
+  if(argstr(0, &password) < 0)
+    return -1;
+  return addUser(username, password);
+}
+
+int sys_deleteUser(void) {
+  char *username;
+  if(argstr(0, &username) < 0)
+    return -1;
+  return deleteUser(username);
+}

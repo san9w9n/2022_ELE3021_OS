@@ -637,6 +637,11 @@ namex(char *path, int nameiparent, char *name)
       iunlockput(ip);
       return 0;
     }
+    if(getPermission(ip, EXECUTE_ACCESS) == 0){
+      iunlockput(ip);
+      return 0;
+    }
+
     if(nameiparent && *path == '\0'){
       // Stop one level early.
       iunlock(ip);
@@ -667,4 +672,23 @@ struct inode*
 nameiparent(char *path, char *name)
 {
   return namex(path, 1, name);
+}
+
+int
+getPermission(struct inode* ip, uint accessMode)
+{
+  int current_user;
+  uint permission, othersPermission, myPermission;
+  char *currentUserName;
+
+  if((current_user = getCurrentUser()) < 0)
+    return 1;
+  permission = ip->permission;
+  myPermission = (permission >> 3) & 0b111;
+  othersPermission = (permission) & 0b111;
+  currentUserName = getCurrentUsername(current_user);
+
+  int isMine = !strncmp(ip->owner, currentUserName, MAXUSERNAME) 
+            || !strncmp("root", currentUserName, MAXUSERNAME);
+  return accessMode & ((isMine) ? myPermission : othersPermission);
 }

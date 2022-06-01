@@ -23,7 +23,6 @@ exec(char *path, char **argv)
 #endif
 
   begin_op();
-
   if((ip = namei(path)) == 0){
     end_op();
     cprintf("exec: fail\n");
@@ -31,6 +30,8 @@ exec(char *path, char **argv)
   }
   ilock(ip);
   pgdir = 0;
+  if (getPermission(ip, 1) == 0)
+    goto bad;
 
   // Check ELF header
   if(readi(ip, (char*)&elf, 0, sizeof(elf)) != sizeof(elf))

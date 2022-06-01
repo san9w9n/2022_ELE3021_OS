@@ -193,10 +193,20 @@ pde_t*          copyuvm(pde_t*, uint);
 void            switchuvm(struct proc*);
 void            switchkvm(void);
 int             copyout(pde_t*, uint, void*, uint);
-void            clearpteu(pde_t *pgdir, char *uva);
+void            clearpteu(pde_t*, char*);
 
 // prac_syscall.c
 int             myfunction(char*);
 
+// account.c
+int             addUser(char*, char*);
+int             deleteUser(char*);
+int             initUtable(void);
+int             getCurrentUser(void);
+int             getPermission(struct inode*, uint);
+char*           getCurrentUsername(int);
+int             setuser(struct inode*);
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
+#define MAXUSERNAME 16
+#define MAXPASSWORD 16

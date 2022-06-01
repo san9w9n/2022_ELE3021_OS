@@ -31,6 +31,9 @@ int setpriority(int, int);
 int thread_create(thread_t*, void*, void*);
 void thread_exit(void*);
 int thread_join(thread_t, void**);
+int setuser(void);
+int addUser(char *, char *);
+int deleteUser(char *);
 
 // ulib.c
 int stat(const char*, struct stat*);
@@ -45,3 +48,4 @@ void* memset(void*, int, uint);
 void* malloc(uint);
 void free(void*);
 int atoi(const char*);
+

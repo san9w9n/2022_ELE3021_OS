@@ -200,6 +200,9 @@ sys_unlink(void)
 
   ilock(dp);
 
+  if (getPermission(dp, WRITE_ACCESS) == 0)
+    goto bad;
+
   // Cannot unlink "." or "..".
   if(namecmp(name, ".") == 0 || namecmp(name, "..") == 0)
     goto bad;
@@ -251,9 +254,14 @@ create(char *path, short type, short major, short minor)
   if((ip = dirlookup(dp, name, 0)) != 0){
     iunlockput(dp);
     ilock(ip);
-    if(type == T_FILE && ip->type == T_FILE)
+    if(type == T_FILE && ip->type == T_FILE && getPermission(ip, WRITE_ACCESS)) 
       return ip;
     iunlockput(ip);
+    return 0;
+  }
+
+  if(getPermission(dp, WRITE_ACCESS) == 0){
+    iunlockput(dp);
     return 0;
   }
 
@@ -307,12 +315,16 @@ sys_open(void)
       return -1;
     }
     ilock(ip);
-    if(ip->type == T_DIR && omode != O_RDONLY){
-      iunlockput(ip);
-      end_op();
-      return -1;
-    }
+    if(ip->type == T_DIR && omode != O_RDONLY)
+      goto Bad;
   }
+
+  if (omode == O_WRONLY && !getPermission(ip, WRITE_ACCESS))
+    goto Bad;
+  if (omode == O_RDONLY && !getPermission(ip, READ_ACCESS))
+    goto Bad;
+  if (omode == O_RDWR && !getPermission(ip, WRITE_ACCESS | READ_ACCESS))
+    goto Bad;
 
   if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
     if(f)
@@ -330,6 +342,11 @@ sys_open(void)
   f->readable = !(omode & O_WRONLY);
   f->writable = (omode & O_WRONLY) || (omode & O_RDWR);
   return fd;
+
+Bad:
+  iunlockput(ip);
+  end_op();
+  return -1;
 }
 
 int
@@ -381,16 +398,22 @@ sys_chdir(void)
     return -1;
   }
   ilock(ip);
-  if(ip->type != T_DIR){
-    iunlockput(ip);
-    end_op();
-    return -1;
-  }
+  if(ip->type != T_DIR)
+    goto Bad;
+
+  if(getPermission(ip, EXECUTE_ACCESS) == 0)
+    goto Bad;
+
   iunlock(ip);
   iput(curproc->cwd);
   end_op();
   curproc->cwd = ip;
   return 0;
+
+Bad:
+  iunlockput(ip);
+  end_op();
+  return -1;
 }
 
 int
@@ -440,5 +463,42 @@ sys_pipe(void)
   }
   fd[0] = fd0;
   fd[1] = fd1;
+  return 0;
+}
+
+int
+sys_setuser(void)
+{
+  struct inode* account;
+  begin_op();
+  if((account = namei("/account")) == 0){
+    if ((account = create("account", T_FILE, 0, 0)) == 0) {
+      end_op();
+      return 0;
+    }
+    strncpy(account->owner, "root", 16);
+    account->permission = MODE_RUSR | MODE_WUSR;
+    iupdate(account);
+    iunlockput(account);
+  }
+  iput(account);
+  end_op();
+
+  begin_op();
+  if ((account = namei("/account")) == 0){
+    end_op();
+    return 0;
+  }
+  ilock(account);
+  if (setuser(account) == 0) {
+    goto bad;
+  }
+  iupdate(account);
+  iunlockput(account);
+  end_op();
+  return 0;
+bad:
+  iunlockput(account);
+  end_op();
   return 0;
 }
