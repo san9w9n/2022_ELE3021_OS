@@ -230,6 +230,8 @@ iupdate(struct inode *ip)
   dip->minor = ip->minor;
   dip->nlink = ip->nlink;
   dip->size = ip->size;
+  dip->permission = ip->permission;
+  strncpy(dip->owner, ip->owner, MAXUSERNAME);
   memmove(dip->addrs, ip->addrs, sizeof(ip->addrs));
   log_write(bp);
   brelse(bp);
@@ -684,9 +686,12 @@ getPermission(struct inode* ip, uint accessMode)
   int current_user;
   uint permission, othersPermission, myPermission;
   char *currentUserName;
-
+  
+  if(ip->type == T_DEV)
+    return 1;
   if((current_user = getCurrentUser()) < 0)
     return 1;
+  
   permission = ip->permission;
   myPermission = (permission >> 3) & 0b111;
   othersPermission = (permission) & 0b111;

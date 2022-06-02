@@ -145,7 +145,9 @@ int
 main(void)
 {
   static char buf[100];
+  static char logoutChar[7] = "logout";
   int fd;
+  uint i;
 
   // Ensure that three file descriptors are open.
   while((fd = open("console", O_RDWR)) >= 0){
@@ -163,6 +165,14 @@ main(void)
       if(chdir(buf+3) < 0)
         printf(2, "cannot cd %s\n", buf+3);
       continue;
+    }
+    for(i = 0; i < 6; i++){
+      if(buf[i] != logoutChar[i])
+        break;
+    }
+    if(i>=6){
+      logout();
+      break;
     }
     if(fork1() == 0)
       runcmd(parsecmd(buf));

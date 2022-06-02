@@ -91,3 +91,27 @@ setuser(struct inode* account)
   }
   return 1;
 }
+
+int
+verify(char* username, char* password)
+{
+  uint i;
+  for(i = 0; i < 10; i++)
+  {
+    if (!strncmp(utable.user[i][0], username, MAXUSERNAME) &&
+        !strncmp(utable.user[i][1], password, MAXPASSWORD)){
+      break;
+    }
+  }
+  if(i >= 10)
+    return 1;
+  utable.current_user = i;
+  return 0;
+}
+
+int
+logout(void)
+{
+  utable.current_user = -1;
+  return 0;
+}

@@ -31,3 +31,5 @@
 #define SYS_addUser       30
 #define SYS_deleteUser    31
 #define SYS_setuser       32
+#define SYS_verify        33
+#define SYS_logout        34

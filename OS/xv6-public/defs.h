@@ -206,6 +206,8 @@ int             getCurrentUser(void);
 int             getPermission(struct inode*, uint);
 char*           getCurrentUsername(int);
 int             setuser(struct inode*);
+int             verify(char*, char*);
+int             logout(void);
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
 #define MAXUSERNAME 16

@@ -118,6 +118,8 @@ extern int sys_thread_join(void);
 extern int sys_addUser(void);
 extern int sys_deleteUser(void);
 extern int sys_setuser(void);
+extern int sys_verify(void);
+extern int sys_logout(void);
 
 static int (*syscalls[])(void) = {
 [SYS_fork]          sys_fork,
@@ -152,6 +154,8 @@ static int (*syscalls[])(void) = {
 [SYS_addUser]       sys_addUser,
 [SYS_deleteUser]    sys_deleteUser,
 [SYS_setuser]       sys_setuser,
+[SYS_verify]        sys_verify,
+[SYS_logout]        sys_logout,
 };
 
 void

@@ -5,7 +5,7 @@
 #include "user.h"
 #include "fcntl.h"
 
-char *argv[] = { "sh", 0 };
+char *argv[] = { "verify", 0 };
 
 int
 main(void)
@@ -29,7 +29,7 @@ main(void)
       exit();
     }
     if(pid == 0){
-      exec("sh", argv);
+      exec("verify", argv);
       printf(1, "init: exec sh failed\n");
       exit();
     }

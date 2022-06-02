@@ -34,6 +34,8 @@ int thread_join(thread_t, void**);
 int setuser(void);
 int addUser(char *, char *);
 int deleteUser(char *);
+int verify(char*, char*);
+int logout(void);
 
 // ulib.c
 int stat(const char*, struct stat*);
