@@ -20,7 +20,6 @@ initUtable(void)
   for(i = 0; i < 10; i++){
     memset(utable.user[i], 0, MAXUSERNAME);
   }
-  cprintf("initUtable!!!\n");
   return 0;
 }
 

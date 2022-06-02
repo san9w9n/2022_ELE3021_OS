@@ -25,8 +25,10 @@ fmtname(char *path)
 void
 ls(char *path)
 {
+  char permission[10] = "-rwxrwx";
   char buf[512], *p;
   int fd;
+  uint i;
   struct dirent de;
   struct stat st;
 
@@ -41,12 +43,20 @@ ls(char *path)
     return;
   }
 
+  for(i = 0; i < 6; i++){
+    int bit = st.permission & (1 << i);
+    if(bit == 0)
+      permission[6-i] = '-';
+  }
+
   switch(st.type){
   case T_FILE:
-    printf(1, "%s %d %d %d\n", fmtname(path), st.type, st.ino, st.size);
+    permission[0] = '-';
+    printf(1, "%s %s %d %d %d %s\n", permission, st.owner, st.type, st.ino, st.size, fmtname(path));
     break;
 
   case T_DIR:
+    permission[0] = 'd';
     if(strlen(path) + 1 + DIRSIZ + 1 > sizeof buf){
       printf(1, "ls: path too long\n");
       break;
@@ -63,7 +73,14 @@ ls(char *path)
         printf(1, "ls: cannot stat %s\n", buf);
         continue;
       }
-      printf(1, "%s %d %d %d\n", fmtname(buf), st.type, st.ino, st.size);
+      char childPermission[10] = "drwxrwx";
+      childPermission[0] = (st.type == T_DIR) ? 'd' : '-';
+      for(i = 0; i < 6; i++){
+        int bit = st.permission & (1 << i);
+        if(bit == 0)
+          childPermission[6-i] = '-';
+      }
+      printf(1, "%s %s %d %d %d %s\n", childPermission, st.owner, st.type, st.ino, st.size, fmtname(buf));
     }
     break;
   }

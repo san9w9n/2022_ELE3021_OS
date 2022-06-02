@@ -303,6 +303,8 @@ ilock(struct inode *ip)
     ip->minor = dip->minor;
     ip->nlink = dip->nlink;
     ip->size = dip->size;
+    ip->permission = dip->permission;
+    strncpy(ip->owner, dip->owner, MAXUSERNAME);
     memmove(ip->addrs, dip->addrs, sizeof(ip->addrs));
     brelse(bp);
     ip->valid = 1;
@@ -444,6 +446,8 @@ stati(struct inode *ip, struct stat *st)
   st->type = ip->type;
   st->nlink = ip->nlink;
   st->size = ip->size;
+  st->permission = ip->permission;
+  strncpy(st->owner, ip->owner, MAXUSERNAME);
 }
 
 //PAGEBREAK!
