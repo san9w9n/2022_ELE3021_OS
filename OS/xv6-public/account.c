@@ -148,6 +148,7 @@ setuser(struct inode* account)
       panic("short filewrite");
     i += r;
   }
+  return 0;
 }
 
 int
