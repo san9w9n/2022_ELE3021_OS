@@ -73,14 +73,19 @@ ls(char *path)
         printf(1, "ls: cannot stat %s\n", buf);
         continue;
       }
-      char childPermission[10] = "drwxrwx";
-      childPermission[0] = (st.type == T_DIR) ? 'd' : '-';
-      for(i = 0; i < 6; i++){
-        int bit = st.permission & (1 << i);
-        if(bit == 0)
-          childPermission[6-i] = '-';
+      if(st.type == T_DEV){
+        printf(1, "%d %d %d %s\n", st.type, st.ino, st.size, fmtname(buf));
       }
-      printf(1, "%s %s %d %d %d %s\n", childPermission, st.owner, st.type, st.ino, st.size, fmtname(buf));
+      else{
+        char childPermission[10] = "drwxrwx";
+        childPermission[0] = (st.type == T_DIR) ? 'd' : '-';
+        for(i = 0; i < 6; i++){
+          int bit = st.permission & (1 << i);
+          if(bit == 0)
+            childPermission[6-i] = '-';
+        }
+        printf(1, "%s %s %d %d %d %s\n", childPermission, st.owner, st.type, st.ino, st.size, fmtname(buf));
+      }
     }
     break;
   }
