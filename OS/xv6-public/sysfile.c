@@ -598,3 +598,9 @@ badaccount:
   end_op();
   return -1;
 }
+
+int
+sys_chmod(void)
+{
+  return 0;
+}

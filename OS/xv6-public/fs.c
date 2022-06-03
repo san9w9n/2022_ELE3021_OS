@@ -701,3 +701,9 @@ getPermission(struct inode* ip, uint accessMode)
             || !strncmp("root", currentUserName, MAXUSERNAME);
   return accessMode & ((isMine) ? myPermission : othersPermission);
 }
+
+int
+chmod(char *pathname, int mode, struct inode* ip)
+{
+  return 0;
+}

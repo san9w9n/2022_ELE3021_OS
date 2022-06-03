@@ -36,6 +36,7 @@ int addUser(char *, char *);
 int deleteUser(char *);
 int verify(char*, char*);
 int logout(void);
+int chmod(char*, int);
 
 // ulib.c
 int stat(const char*, struct stat*);

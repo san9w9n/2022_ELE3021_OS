@@ -192,6 +192,7 @@ UPROGS=\
 	_verify\
 	_useradd\
 	_userdelete\
+	_chmod\
 	
 
 fs.img: mkfs README $(UPROGS)
@@ -265,7 +266,7 @@ EXTRA=\
 	printf.c umalloc.c\
 	README dot-bochsrc *.pl toc.* runoff runoff1 runoff.list\
 	.gdbinit.tmpl gdbutil\
-	verify.c useradd.c userdelete.c\
+	verify.c useradd.c userdelete.c chmod.c\
 
 dist:
 	rm -rf dist

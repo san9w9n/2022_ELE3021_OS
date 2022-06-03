@@ -120,6 +120,7 @@ extern int sys_deleteUser(void);
 extern int sys_setuser(void);
 extern int sys_verify(void);
 extern int sys_logout(void);
+extern int sys_chmod(void);
 
 static int (*syscalls[])(void) = {
 [SYS_fork]          sys_fork,
@@ -156,6 +157,7 @@ static int (*syscalls[])(void) = {
 [SYS_setuser]       sys_setuser,
 [SYS_verify]        sys_verify,
 [SYS_logout]        sys_logout,
+[SYS_chmod]         sys_chmod,
 };
 
 void

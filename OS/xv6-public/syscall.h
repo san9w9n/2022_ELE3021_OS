@@ -33,3 +33,4 @@
 #define SYS_setuser       32
 #define SYS_verify        33
 #define SYS_logout        34
+#define SYS_chmod         35
