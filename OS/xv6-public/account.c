@@ -29,11 +29,11 @@ addUser(char *username, char *password, struct inode* account)
   uint i, cnt;
   int r, max, off, n, n1;
   char *addr;
-  
+
   if((cnt = utable.cnt) >= 10)
     return 0;
   for(i = 0; i < 10; i++){
-    if(utable.user[i][0][0] && strncmp(utable.user[i][0], username, MAXUSERNAME) == 0){
+    if(strncmp(utable.user[i][0], username, MAXUSERNAME) == 0){
       return 0;
     }
   }
@@ -66,8 +66,36 @@ addUser(char *username, char *password, struct inode* account)
 }
 
 int 
-deleteUser(char *username) 
+deleteUser(char *username, struct inode* account) 
 {
+  uint i;
+  int r, max, off, n, n1;
+  char *addr;
+
+  for(i = 0; i < 10; i++){
+    if(strncmp(utable.user[i][0], username, MAXUSERNAME) == 0){
+      memset(utable.user[i][0], 0, MAXUSERNAME);
+      memset(utable.user[i][1], 0, MAXPASSWORD);
+      max = ((MAXOPBLOCKS-1-1-2) / 2) * 512;
+      addr = (char*)utable.user;
+      n = 320;
+      i = off = 0;
+      while(i < n){
+        n1 = n - i;
+        if(n1 > max)
+          n1 = max;
+        if ((r = writei(account, addr + i, off, n1)) > 0)
+          off+=r;
+        if(r < 0)
+          break;
+        if(r != n1)
+          panic("short filewrite");
+        i += r;
+      }
+      utable.cnt--;
+      return 1;
+    }
+  }
   return 0;
 }
 

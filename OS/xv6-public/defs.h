@@ -200,7 +200,7 @@ int             myfunction(char*);
 
 // account.c
 int             addUser(char*, char*, struct inode*);
-int             deleteUser(char*);
+int             deleteUser(char*, struct inode*);
 int             initUtable(void);
 int             getCurrentUser(void);
 int             getPermission(struct inode*, uint);

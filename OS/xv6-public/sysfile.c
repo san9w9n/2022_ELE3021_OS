@@ -504,6 +504,41 @@ bad:
 }
 
 int
+sys_deleteUser(void)
+{
+  char *username;
+  int curUserIdx;
+  struct inode* account;
+  
+  if(argstr(0, &username) < 0)
+    return -1;
+  if(strncmp("root", username, MAXUSERNAME) == 0)
+    return -1;
+  curUserIdx = getCurrentUser();
+  if(curUserIdx < 0 || curUserIdx >= 10)
+    return -1;
+  if(strncmp("root", getUserName(curUserIdx), MAXUSERNAME) != 0)
+    return -1;
+
+  begin_op();
+  if((account = namei("/account")) == 0)
+    goto badaccount;
+  ilock(account);
+  if(deleteUser(username, account) == 0){
+    iunlockput(account);
+    goto badaccount;
+  }
+  iupdate(account);
+  iunlockput(account);
+  end_op();
+  return 0;
+
+badaccount:
+  end_op();
+  return -1;
+}
+
+int
 sys_addUser(void) 
 {
   char *username, *password;

@@ -10,13 +10,6 @@
 #include "file.h"
 #include "fcntl.h"
 
-int sys_deleteUser(void) {
-  char *username;
-  if(argstr(0, &username) < 0)
-    return -1;
-  return deleteUser(username);
-}
-
 int
 sys_verify(void)
 {
