@@ -286,7 +286,6 @@ create(char *path, short type, short major, short minor)
     panic("create: dirlink");
 
   iunlockput(dp);
-
   return ip;
 }
 
@@ -297,6 +296,7 @@ sys_open(void)
   int fd, omode;
   struct file *f;
   struct inode *ip;
+  int curUserIdx;
 
   if(argstr(0, &path) < 0 || argint(1, &omode) < 0)
     return -1;
@@ -309,6 +309,14 @@ sys_open(void)
       end_op();
       return -1;
     }
+    curUserIdx = getCurrentUser();
+    if(curUserIdx < 0 || curUserIdx >= 10){
+      end_op();
+      return -1;
+    }
+    ip->permission = MODE_RUSR|MODE_WUSR|MODE_ROTH;
+    strncpy(ip->owner, getUserName(curUserIdx), MAXUSERNAME);
+    iupdate(ip);
   } else {
     if((ip = namei(path)) == 0){
       end_op();
@@ -318,12 +326,12 @@ sys_open(void)
     if(ip->type == T_DIR && omode != O_RDONLY)
       goto Bad;
   }
-
-  if (omode == O_WRONLY && !getPermission(ip, WRITE_ACCESS))
+  
+  if (((omode & 0b11) == O_RDONLY) && !getPermission(ip, READ_ACCESS))
     goto Bad;
-  if (omode == O_RDONLY && !getPermission(ip, READ_ACCESS))
+  if (((omode & 0b11) == O_WRONLY) && !getPermission(ip, WRITE_ACCESS))
     goto Bad;
-  if (omode == O_RDWR && !getPermission(ip, WRITE_ACCESS | READ_ACCESS))
+  if (((omode & 0b11) == O_RDWR) && !getPermission(ip, WRITE_ACCESS | READ_ACCESS))
     goto Bad;
 
   if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
@@ -602,5 +610,29 @@ badaccount:
 int
 sys_chmod(void)
 {
+  char* pathname;
+  int mode;
+  struct inode* ip;
+
+  if(argstr(0, &pathname) < 0)
+    return -1;
+  if(argint(1, &mode) < 0)
+    return -1;
+  mode &= MODE_RUSR|MODE_WUSR|MODE_XUSR|MODE_ROTH|MODE_WOTH|MODE_XOTH;
+
+  begin_op();
+  if((ip = namei(pathname)) == 0){
+    end_op();
+    return -1;
+  }
+  ilock(ip);
+  if (chmod(mode, ip) == 0){
+    iunlockput(ip);
+    end_op();
+    return -1;
+  }
+  iupdate(ip);
+  iunlockput(ip);
+  end_op();
   return 0;
 }

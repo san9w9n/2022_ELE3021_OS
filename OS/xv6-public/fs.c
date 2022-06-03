@@ -703,7 +703,18 @@ getPermission(struct inode* ip, uint accessMode)
 }
 
 int
-chmod(char *pathname, int mode, struct inode* ip)
+chmod(int mode, struct inode* ip)
 {
+  int curUserIdx;
+  
+  curUserIdx = getCurrentUser();
+  if(curUserIdx < 0 || curUserIdx >= 10)
+    return 0;
+  if((strncmp(ip->owner, getUserName(curUserIdx), MAXUSERNAME) == 0)
+    || (strncmp("root", getUserName(curUserIdx), MAXUSERNAME) == 0))
+  {
+    ip->permission = mode;
+    return 1;
+  }
   return 0;
 }
