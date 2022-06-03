@@ -502,3 +502,54 @@ bad:
   end_op();
   return 0;
 }
+
+int
+sys_addUser(void) 
+{
+  char *username, *password;
+  char homepath[MAXUSERNAME + 5];
+  int curUserIdx;
+  struct inode* account;
+  struct inode* home;
+  
+  if(argstr(0, &username) < 0)
+    return -1;
+  if(argstr(1, &password) < 0)
+    return -1;
+  curUserIdx = getCurrentUser();
+  if(curUserIdx < 0 || curUserIdx >= 10)
+    return -1;
+  if(strncmp("root", getUserName(curUserIdx), MAXUSERNAME) != 0)
+    return -1;
+  
+  begin_op();
+  if((account = namei("/account")) == 0){
+    end_op();
+    return -1;
+  }
+  ilock(account);
+  if(addUser(username, password, account) == 0)
+    goto badaccount;
+  iupdate(account);
+  iunlockput(account);
+  
+  homepath[0] = '/';
+  strncpy(&homepath[1], username, MAXUSERNAME);
+  if((home = namei(homepath)) == 0){
+    if ((home = create(homepath, T_DIR, 0, 0)) == 0) {
+      end_op();
+      return -1;
+    }
+    strncpy(home->owner, username, MAXUSERNAME);
+    home->permission = MODE_RUSR|MODE_WUSR|MODE_XUSR|MODE_ROTH|MODE_XOTH;
+    iupdate(home);
+    iunlockput(home);
+  }
+  else iput(home);
+  end_op();
+  return 0;
+badaccount:
+  iunlockput(account);
+  end_op();
+  return -1;
+}

@@ -24,18 +24,50 @@ initUtable(void)
 }
 
 int
-addUser(char *username, char *password)
+addUser(char *username, char *password, struct inode* account)
 {
-  if(!username || !password)
-    panic("Null pointer. (addUser)");
-  return 0;
+  uint i, cnt;
+  int r, max, off, n, n1;
+  char *addr;
+  
+  if((cnt = utable.cnt) >= 10)
+    return 0;
+  for(i = 0; i < 10; i++){
+    if(utable.user[i][0][0] && strncmp(utable.user[i][0], username, MAXUSERNAME) == 0){
+      return 0;
+    }
+  }
+  for(i = 0; i < 10; i++){
+    if(utable.user[i][0][0] == 0)
+      break;
+  }
+  if(i == 10)
+    return 0;
+  strncpy(utable.user[i][0], username, MAXUSERNAME);
+  strncpy(utable.user[i][1], password, MAXPASSWORD);
+  max = ((MAXOPBLOCKS-1-1-2) / 2) * 512;
+  addr = (char*)utable.user;
+  n = 320;
+  i = off = 0;
+  while(i < n){
+    n1 = n - i;
+    if(n1 > max)
+      n1 = max;
+
+    if ((r = writei(account, addr + i, off, n1)) > 0)
+      off+=r;
+    if(r < 0)
+      break;
+    if(r != n1)
+      panic("short filewrite");
+    i += r;
+  }
+  return utable.cnt++;
 }
 
 int 
 deleteUser(char *username) 
 {
-  if(!username)
-    panic("Null pointer. (deleteUser)");
   return 0;
 }
 
@@ -46,7 +78,7 @@ getCurrentUser(void)
 }
 
 char*
-getCurrentUsername(int idx)
+getUserName(int idx)
 {
   if(idx < 0 || idx >= 10)
     return 0;

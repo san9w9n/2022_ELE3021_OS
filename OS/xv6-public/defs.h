@@ -199,12 +199,12 @@ void            clearpteu(pde_t*, char*);
 int             myfunction(char*);
 
 // account.c
-int             addUser(char*, char*);
+int             addUser(char*, char*, struct inode*);
 int             deleteUser(char*);
 int             initUtable(void);
 int             getCurrentUser(void);
 int             getPermission(struct inode*, uint);
-char*           getCurrentUsername(int);
+char*           getUserName(int);
 int             setuser(struct inode*);
 int             verify(char*, char*);
 int             logout(void);

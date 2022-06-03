@@ -695,7 +695,7 @@ getPermission(struct inode* ip, uint accessMode)
   permission = ip->permission;
   myPermission = (permission >> 3) & 0b111;
   othersPermission = (permission) & 0b111;
-  currentUserName = getCurrentUsername(current_user);
+  currentUserName = getUserName(current_user);
 
   int isMine = !strncmp(ip->owner, currentUserName, MAXUSERNAME) 
             || !strncmp("root", currentUserName, MAXUSERNAME);

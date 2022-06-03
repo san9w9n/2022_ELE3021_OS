@@ -10,15 +10,6 @@
 #include "file.h"
 #include "fcntl.h"
 
-int sys_addUser(void) {
-  char *username, *password;
-  if(argstr(0, &username) < 0)
-    return -1;
-  if(argstr(1, &password) < 0)
-    return -1;
-  return addUser(username, password);
-}
-
 int sys_deleteUser(void) {
   char *username;
   if(argstr(0, &username) < 0)
