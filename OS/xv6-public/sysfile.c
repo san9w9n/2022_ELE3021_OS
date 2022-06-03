@@ -490,7 +490,7 @@ sys_setuser(void)
   struct inode* account;
   begin_op();
   if((account = namei("/account")) == 0){
-    if ((account = create("account", T_FILE, 0, 0)) == 0) {
+    if ((account = create("/account", T_FILE, 0, 0)) == 0) {
       end_op();
       return 0;
     }
@@ -498,24 +498,14 @@ sys_setuser(void)
     account->permission = MODE_RUSR | MODE_WUSR;
     iupdate(account);
     iunlockput(account);
-  }
-  iput(account);
-  end_op();
-
-  begin_op();
-  if ((account = namei("/account")) == 0){
-    end_op();
-    return 0;
+    if((account = namei("/account")) == 0)
+      panic("setuser");
   }
   ilock(account);
-  if (setuser(account) == 0) {
-    goto bad;
-  }
+  if(setuser(account) == 0)
+    goto finish;
   iupdate(account);
-  iunlockput(account);
-  end_op();
-  return 0;
-bad:
+finish:
   iunlockput(account);
   end_op();
   return 0;

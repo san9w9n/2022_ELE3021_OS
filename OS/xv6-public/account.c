@@ -125,14 +125,13 @@ setuser(struct inode* account)
   
   for(i = 0; i < 10; i++)
     utable.cnt += (utable.user[i][0][0]) ? 1 : 0;
-  if(!utable.cnt){
-    strncpy(utable.user[0][0], "root", MAXUSERNAME);
-    strncpy(utable.user[0][1], "0000", MAXPASSWORD);
-    utable.cnt = 1;
-  }
+  if(utable.cnt > 0)
+    return 1;
+  strncpy(utable.user[0][0], "root", MAXUSERNAME);
+  strncpy(utable.user[0][1], "0000", MAXPASSWORD);
+  utable.cnt = 1;
 
   max = ((MAXOPBLOCKS-1-1-2) / 2) * 512;
-
   addr = (char*)utable.user;
   n = 320;
   i = off = 0;
@@ -149,7 +148,6 @@ setuser(struct inode* account)
       panic("short filewrite");
     i += r;
   }
-  return 1;
 }
 
 int
