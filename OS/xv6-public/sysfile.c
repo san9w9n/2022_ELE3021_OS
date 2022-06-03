@@ -354,15 +354,25 @@ sys_mkdir(void)
 {
   char *path;
   struct inode *ip;
+  int currentUserIndex;
 
   begin_op();
-  if(argstr(0, &path) < 0 || (ip = create(path, T_DIR, 0, 0)) == 0){
-    end_op();
-    return -1;
+  if(argstr(0, &path) < 0 || (ip = create(path, T_DIR, 0, 0)) == 0)
+    goto Bad;
+  currentUserIndex = getCurrentUser();
+  if(currentUserIndex < 0 || currentUserIndex >= 10){
+    iunlockput(ip);
+    goto Bad;
   }
+  ip->permission = MODE_RUSR|MODE_WUSR|MODE_XUSR|MODE_ROTH|MODE_XOTH;
+  strncpy(ip->owner, getUserName(currentUserIndex), MAXUSERNAME);
+  iupdate(ip);
   iunlockput(ip);
   end_op();
   return 0;
+Bad:
+  end_op();
+  return -1;
 }
 
 int
