@@ -155,6 +155,8 @@ int
 verify(char* username, char* password)
 {
   uint i;
+  if(username[0] == '\0' || password[0] == '\0') 
+    return 1;
   for(i = 0; i < 10; i++)
   {
     if (!strncmp(utable.user[i][0], username, MAXUSERNAME) &&
