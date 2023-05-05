@@ -1,5 +1,5 @@
 # 2022_ELE3021_OS
-2022 Operating System, (Prof. Sooyong kang)
+2022 Operating System
 
 ## [Project1](https://github.com/san9w9n/2022_ELE3021_OS/blob/master/report/OS_project01_2018008877.pdf)
 
